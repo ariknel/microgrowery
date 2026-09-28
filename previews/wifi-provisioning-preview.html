@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrowBox Provisioning Preview</title>
+<style>
+  :root{
+    --bg:#f7faf7; --panel:#ffffff; --panel-2:#f3f7f3;
+    --border:rgba(46,125,50,.18); --text:#12180f; --dim:#5b6b5c;
+    --accent:#2e7d32; --info-bg:#eaf3fb; --info-border:#bcdcf5; --info-text:#1f5c85;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:32px 16px 60px; min-height:100vh;
+    background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .wrap{max-width:720px; margin:0 auto;}
+  .banner{
+    background:var(--info-bg); border:1px solid var(--info-border); color:var(--info-text);
+    border-radius:12px; padding:14px 16px; font-size:.85rem; line-height:1.5; margin-bottom:32px;
+  }
+  .banner b{color:#0f2e42;}
+  .banner code{background:rgba(0,0,0,.06); padding:1px 5px; border-radius:4px; font-size:.82em;}
+
+  h2{font-size:.78rem; text-transform:uppercase; letter-spacing:.09em; color:var(--dim); font-weight:650; margin:0 0 12px;}
+  .step{margin-bottom:40px;}
+  .step-num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:20px; height:20px; border-radius:50%; background:var(--accent); color:#08150a;
+    font-size:.7rem; font-weight:800; margin-right:8px; vertical-align:middle;
+  }
+
+  /* ---- phone wifi-picker mockup ---- */
+  .phone{
+    width:280px; margin:0 auto; background:var(--panel); border:1px solid var(--border);
+    border-radius:22px; padding:18px 16px; box-shadow:0 8px 30px rgba(18,24,15,.08);
+  }
+  .phone-head{font-size:.95rem; font-weight:650; margin-bottom:14px;}
+  .net-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:11px 4px; border-bottom:1px solid rgba(0,0,0,.08); font-size:.85rem; color:var(--dim);
+  }
+  .net-row:last-child{border-bottom:none;}
+  .net-row.active{color:var(--text);}
+  .net-name{display:flex; align-items:center; gap:8px;}
+  .net-name svg{width:16px; height:16px; flex:none; color:currentColor; opacity:.7;}
+  .net-row.active .net-name svg{color:var(--accent); opacity:1;}
+  .check{color:var(--accent); font-weight:800; font-size:.9rem;}
+  .pass-hint{
+    margin-top:14px; font-size:.75rem; color:var(--dim);
+    background:rgba(76,175,80,.08); border:1px solid var(--border); border-radius:8px; padding:8px 10px;
+  }
+  .pass-hint b{color:var(--accent);}
+
+  /* ---- browser chrome mockup ---- */
+  .browser{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden;
+    box-shadow:0 8px 30px rgba(18,24,15,.08);
+  }
+  .browser-bar{
+    display:flex; align-items:center; gap:8px; padding:10px 12px;
+    background:var(--panel-2); border-bottom:1px solid var(--border);
+  }
+  .dots{display:flex; gap:5px;}
+  .dots span{width:9px; height:9px; border-radius:50%; background:rgba(0,0,0,.15);}
+  .addr{
+    flex:1; background:rgba(0,0,0,.06); border-radius:6px; padding:5px 10px;
+    font-size:.78rem; color:var(--dim); font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  .addr b{color:var(--text);}
+
+  .tabs{display:flex; gap:8px; margin:14px 0 0;}
+  .tab-btn{
+    flex:1; padding:9px; border-radius:8px; border:1px solid var(--border); background:transparent;
+    color:var(--dim); font-size:.78rem; font-weight:650; cursor:pointer; font-family:inherit;
+    transition:background .12s ease, color .12s ease;
+  }
+  .tab-btn.on{background:rgba(76,175,80,.12); border-color:var(--accent); color:var(--accent);}
+
+  iframe{width:100%; height:340px; border:none; display:block; background:#111;}
+  .caption{font-size:.75rem; color:var(--dim); margin-top:10px; line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="banner">
+    <b>Preview, not live firmware.</b> This reproduces, byte-for-byte, the HTML
+    served by <code>wifi_manager_run_provisioning()</code> in
+    <code>firmware/main/wifi_manager.c</code> — what you'll actually see the
+    first time you power the real board on with no WiFi credentials stored yet.
+  </div>
+
+  <div class="step">
+    <h2><span class="step-num">1</span>Join the setup network</h2>
+    <div class="phone">
+      <div class="phone-head">Wi-Fi</div>
+      <div class="net-row"><span class="net-name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8.5a16 16 0 0 1 20 0M5.5 12a11 11 0 0 1 13 0M9 15.5a6 6 0 0 1 6 0"/><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>HomeNetwork-5G</span></div>
+      <div class="net-row active"><span class="net-name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>GrowBox-Setup</span><span class="check">✓</span></div>
+      <div class="net-row"><span class="net-name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8.5a16 16 0 0 1 20 0M5.5 12a11 11 0 0 1 13 0M9 15.5a6 6 0 0 1 6 0"/><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>Neighbor_WiFi</span></div>
+      <div class="pass-hint">Network password: <b>growbox123</b></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <h2><span class="step-num">2</span>The portal at 192.168.4.1</h2>
+    <div class="browser">
+      <div class="browser-bar">
+        <div class="dots"><span></span><span></span><span></span></div>
+        <div class="addr">http://<b id="addrPath">192.168.4.1</b></div>
+      </div>
+      <iframe id="portalFrame" title="Provisioning portal preview"></iframe>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn on" id="tabForm" type="button">Setup form</button>
+      <button class="tab-btn" id="tabSaved" type="button">After tapping "Save &amp; Restart"</button>
+    </div>
+    <div class="caption">
+      On the real device this button does a real <code>POST /save</code>,
+      writes the credentials to NVS, and restarts within 3 seconds. Use the
+      tabs above to preview both screens it can show — the form itself is
+      otherwise inert here (no server behind this preview to submit to).
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var FORM_HTML =
+    '<!doctype html><html><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>GrowBox Setup</title>' +
+    '<style>body{font-family:sans-serif;background:#111;color:#eee;display:flex;' +
+    'align-items:center;justify-content:center;min-height:100vh;margin:0;}' +
+    'form{background:#1c1c1c;padding:24px;border-radius:12px;width:280px;}' +
+    'h1{font-size:1.1rem;margin:0 0 16px;}' +
+    'input{width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px;' +
+    'border-radius:6px;border:1px solid #444;background:#0a0a0a;color:#eee;}' +
+    'button{width:100%;padding:10px;border-radius:6px;border:none;' +
+    'background:#4caf50;color:#fff;font-weight:bold;}</style></head><body>' +
+    '<form method="POST" action="/save">' +
+    '<h1>Connect GrowBox to WiFi</h1>' +
+    '<input name="ssid" placeholder="WiFi network name" required>' +
+    '<input name="pass" type="password" placeholder="WiFi password">' +
+    '<button type="submit">Save &amp; Restart</button>' +
+    '</form></body></html>';
+
+  var SAVED_HTML =
+    '<!doctype html><html><head><meta charset="utf-8"></head>' +
+    '<body style="font-family:sans-serif;background:#111;color:#eee;">' +
+    '<p>Saved. Restarting&hellip;</p></body></html>';
+
+  var frame = document.getElementById("portalFrame");
+  var tabForm = document.getElementById("tabForm");
+  var tabSaved = document.getElementById("tabSaved");
+  var addrPath = document.getElementById("addrPath");
+
+  function show(which){
+    if(which === "form"){
+      frame.srcdoc = FORM_HTML;
+      addrPath.textContent = "192.168.4.1";
+      tabForm.classList.add("on");
+      tabSaved.classList.remove("on");
+    } else {
+      frame.srcdoc = SAVED_HTML;
+      addrPath.textContent = "192.168.4.1/save";
+      tabSaved.classList.add("on");
+      tabForm.classList.remove("on");
+    }
+  }
+
+  tabForm.addEventListener("click", function(){ show("form"); });
+  tabSaved.addEventListener("click", function(){ show("saved"); });
+
+  show("form");
+})();
+</script>
+</body>
+</html>
