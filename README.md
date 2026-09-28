@@ -103,7 +103,7 @@ Carbon filter: 3D printed housing, 80mm depth activated carbon bed,
 ```
 
 <p align="center">
-  <img src="docs/images/cabinet_dimensions.jpg" alt="Cabinet technical drawing" width="600"/>
+  <img src="docs/images/kast-1.png" alt="Cabinet technical drawing" width="600"/>
 </p>
 
 ---
@@ -224,9 +224,9 @@ The project consists of four custom PCBs, all designed in KiCad and manufactured
 </p>
 
 <p align="center">
-  <img src="docs/images/pcb_driver_render_front.jpg" alt="Driver board KiCad 3D render" width="500"/>
+  <img src="docs/images/driver_front.PNG" alt="Driver board KiCad 3D render" width="500"/>
   &nbsp;&nbsp;
-  <img src="docs/images/pcb_driver_render_back.jpg" alt="Driver board KiCad 3D render back" width="500"/>
+  <img src="docs/images/driver_back.PNG" alt="Driver board KiCad 3D render back" width="500"/>
 </p>
 
 <p align="center">
@@ -276,9 +276,9 @@ Total (4 boards) = 4 × 16.3W = 65.3W at 100% PWM
 </p>
 
 <p align="center">
-  <img src="docs/images/pcb_led_render.jpg" alt="LED board KiCad 3D render" width="500"/>
+  <img src="docs/images/led_front.PNG" alt="LED board KiCad 3D render" width="500"/>
   &nbsp;&nbsp;
-  <img src="docs/images/pcb_led_thermal.jpg" alt="LED board back showing copper pour and aluminum plate" width="500"/>
+  <img src="docs/images/led_back.PNG" alt="LED board back showing copper pour and aluminum plate" width="500"/>
 </p>
 
 <p align="center">
@@ -329,8 +329,9 @@ Thermal paste (Shin-Etsu X-23 or equivalent)
 <p align="center">
   <img src="docs/images/pcb_sensor_top.jpg" alt="Sensor board top" width="400"/>
   &nbsp;&nbsp;
-  <img src="docs/images/pcb_sensor_render.jpg" alt="Sensor board KiCad 3D render" width="400"/>
+  <img src="docs/images/sensor_front.PNG" alt="Sensor board KiCad 3D render" width="400"/>
 </p>
+
 
 **Components:**
 
