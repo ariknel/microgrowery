@@ -1,0 +1,33 @@
+{
+  "name": "Microgrowery Firmware (ESP-IDF)",
+  "build": {
+    "context": "..",
+    "dockerfile": "../Dockerfile"
+  },
+
+  // Gives the container access to USB serial devices (the ESP32-S3) without
+  // having to know the exact /dev/ttyUSBx path ahead of time. This is the
+  // standard, well-tested pattern for serial-device devcontainers — it does
+  // mean the container has broad access to host devices, which is a fine
+  // tradeoff for a personal local dev container but worth knowing about.
+  "runArgs": ["--privileged"],
+  "mounts": [
+    "source=/dev,target=/dev,type=bind"
+  ],
+
+  // First container start only: pins the build target so `idf.py build`
+  // works immediately without a manual `idf.py set-target` step.
+  "postCreateCommand": "cd firmware && idf.py set-target esp32s3",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "espressif.esp-idf-extension"
+      ],
+      "settings": {
+        "terminal.integrated.cwd": "/workspaces/${localWorkspaceFolderBasename}/firmware"
+      }
+    }
+  }
+}

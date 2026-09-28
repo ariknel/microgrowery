@@ -1,0 +1,59 @@
+# Build (and optionally flash/monitor) the firmware through Espressif's
+# official ESP-IDF Docker image, so nobody needs the toolchain installed
+# locally. This builds the firmware, it does not run it — the resulting
+# .bin is what flashes onto and runs on the ESP32-S3 itself.
+#
+# Usage:
+#   docker compose run --rm build      # idf.py build
+#   docker compose run --rm menuconfig # idf.py menuconfig (interactive)
+#   docker compose run --rm flash      # idf.py flash (needs USB passthrough, see README)
+#   docker compose run --rm monitor    # idf.py monitor (needs USB passthrough, see README)
+#   docker compose run --rm shell      # drop into a shell with idf.py on PATH
+#
+# PORT defaults to /dev/ttyUSB0 — override per-run:
+#   PORT=/dev/ttyACM0 docker compose run --rm flash
+
+x-idf-common: &idf-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  working_dir: /project
+  volumes:
+    - ./firmware:/project
+
+services:
+  build:
+    <<: *idf-common
+    command: idf.py build
+
+  menuconfig:
+    <<: *idf-common
+    stdin_open: true
+    tty: true
+    command: idf.py menuconfig
+
+  clean:
+    <<: *idf-common
+    command: idf.py fullclean
+
+  flash:
+    <<: *idf-common
+    devices:
+      - "${PORT:-/dev/ttyUSB0}:${PORT:-/dev/ttyUSB0}"
+    command: idf.py -p ${PORT:-/dev/ttyUSB0} flash
+
+  monitor:
+    <<: *idf-common
+    devices:
+      - "${PORT:-/dev/ttyUSB0}:${PORT:-/dev/ttyUSB0}"
+    stdin_open: true
+    tty: true
+    command: idf.py -p ${PORT:-/dev/ttyUSB0} monitor
+
+  shell:
+    <<: *idf-common
+    devices:
+      - "${PORT:-/dev/ttyUSB0}:${PORT:-/dev/ttyUSB0}"
+    stdin_open: true
+    tty: true
+    entrypoint: bash

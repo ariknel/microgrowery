@@ -1,0 +1,14 @@
+-- IDF_TARGET is not set, guessed 'esp32s3' from sdkconfig '/project/sdkconfig.defaults'
+-- Found Git: /usr/bin/git (found version "2.34.1") 
+-- ccache will be used for faster recompilation
+-- The C compiler identification is GNU 13.2.0
+-- The CXX compiler identification is GNU 13.2.0
+-- The ASM compiler identification is GNU
+-- Found assembler: /opt/esp/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - failed
+-- Check for working C compiler: /opt/esp/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc
+-- Check for working C compiler: /opt/esp/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc - broken
+-- Configuring incomplete, errors occurred!
+See also "/project/build/CMakeFiles/CMakeOutput.log".
+See also "/project/build/CMakeFiles/CMakeError.log".

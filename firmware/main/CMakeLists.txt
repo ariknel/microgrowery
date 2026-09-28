@@ -1,0 +1,31 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "state.c"
+        "nvs_config.c"
+        "auth.c"
+        "aht20.c"
+        "fusb302.c"
+        "fusb302_pd.c"
+        "led_control.c"
+        "schedule.c"
+        "wifi_manager.c"
+        "uart_cam.c"
+        "http_server.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        freertos
+        driver
+        esp_wifi
+        esp_event
+        esp_netif
+        esp_http_server
+        nvs_flash
+        mdns
+        json
+        esp_timer
+        esp_system
+        esp_hw_support
+        lwip
+    EMBED_TXTFILES "dashboard.html"
+)
