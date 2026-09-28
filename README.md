@@ -276,9 +276,9 @@ Total (4 boards) = 4 × 16.3W = 65.3W at 100% PWM
 </p>
 
 <p align="center">
-  <img src="docs/images/led_front.PNG" alt="LED board KiCad 3D render" width="500"/>
+  <img src="docs/led_front.PNG" alt="LED board KiCad 3D render" width="500"/>
   &nbsp;&nbsp;
-  <img src="docs/images/led_back.PNG" alt="LED board back showing copper pour and aluminum plate" width="500"/>
+  <img src="docs/led_back.PNG" alt="LED board back showing copper pour and aluminum plate" width="500"/>
 </p>
 
 <p align="center">
