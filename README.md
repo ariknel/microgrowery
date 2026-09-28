@@ -224,9 +224,9 @@ The project consists of four custom PCBs, all designed in KiCad and manufactured
 </p>
 
 <p align="center">
-  <img src="docs/images/pcb_driver_render_front.jpg" alt="Driver board KiCad 3D render" width="500"/>
+  <img src="docs/driver_front.PNG" alt="Driver board KiCad 3D render" width="500"/>
   &nbsp;&nbsp;
-  <img src="docs/images/pcb_driver_render_back.jpg" alt="Driver board KiCad 3D render back" width="500"/>
+  <img src="docs/driver_back.PNG" alt="Driver board KiCad 3D render back" width="500"/>
 </p>
 
 <p align="center">
