@@ -327,9 +327,9 @@ Thermal paste (Shin-Etsu X-23 or equivalent)
 > A minimal standalone board carrying only the AHT20 temperature and humidity sensor and its required passives. Connects to the hub via a 4-pin I2C cable. Designed to be mounted away from heat sources — ideally at mid-height on the cabinet wall for accurate ambient readings.
 
 <p align="center">
-  <img src="docs/images/pcb_sensor_top.jpg" alt="Sensor board top" width="400"/>
+  <img src="docs/sensor_front.PNG" alt="Sensor board top" width="400"/>
   &nbsp;&nbsp;
-  <img src="docs/images/pcb_sensor_render.jpg" alt="Sensor board KiCad 3D render" width="400"/>
+  <img src="docs/sensor_back.PNG" alt="Sensor board KiCad 3D render" width="400"/>
 </p>
 
 **Components:**
