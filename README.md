@@ -5,8 +5,8 @@
 <h1 align="center">🌱 GrowBox</h1>
 
 <p align="center">
-  Open-source USB-C powered smart microgrowery controller.<br/>
-  ESP32-S3 hub · 65W LED panel · WiFi dashboard · Camera streaming · USB-C PD
+  Open-source USB-C powered smart microgrowery<br/>
+  ESP32-S3 hub · 87W LED panel · WiFi dashboard · Camera streaming · USB-C PD
 </p>
 
 <p align="center">
@@ -22,6 +22,7 @@
 
 - [Overview](#overview)
 - [Cabinet](#cabinet)
+- [Carbon filter](#carbon-filter)
 - [System Architecture](#system-architecture)
 - [PCB Boards](#pcb-boards)
   - [1. Main Hub Board](#1-main-hub-board)
@@ -46,7 +47,7 @@
 
 ## Overview
 
-GrowBox is a fully custom USB-C powered microgrowery controller designed to fit under a desk. It drives a 65W warm white LED grow panel, controls intake and exhaust ventilation fans, monitors temperature and humidity, streams a live camera feed, and serves a local web dashboard — all from a single USB-C cable.
+GrowBox is a fully custom USB-C powered microgrowery designed to fit under a desk. The controller drives an 87W warm white LED grow panel, controls intake and exhaust ventilation fans, monitors temperature and humidity, streams a live camera feed, and serves a local web dashboard — all from a single USB-C cable. Efficiency is thus high.
 
 Everything is custom designed: four separate PCBs, ESP32-S3 firmware in bare C using ESP-IDF, and a self-contained HTML dashboard served directly from the microcontroller.
 
@@ -59,9 +60,9 @@ Everything is custom designed: four separate PCBs, ESP32-S3 firmware in bare C u
 | Parameter | Value |
 |-----------|-------|
 | Input power | USB-C PD 20V via FUSB302 |
-| Max LED power | 65W (60× warm white LEDs) |
-| LED panel size | 4× 85×55mm boards, 2×2 arrangement |
-| Cabinet size | 380×380×850mm (external) |
+| Max LED power | 87W (80× warm white LEDs) |
+| LED panel size | 4× boards placed in a grid|
+| Cabinet size | 600x450x720 (external) |
 | MCU | ESP32-S3 bare SoC, 8MB NOR flash |
 | Connectivity | WiFi 802.11 b/g/n, mDNS growbox.local |
 | Environment sensor | AHT20 temperature + humidity |
@@ -72,7 +73,7 @@ Everything is custom designed: four separate PCBs, ESP32-S3 firmware in bare C u
 
 ## Cabinet
 
-The cabinet is constructed from 18mm MDF with a full-front door sealed with EPDM weatherstripping and magnetic latches. Internal walls are lined with reflective Mylar film to maximize light distribution. A DIY activated carbon filter with a 120mm exhaust fan handles odor control.
+The cabinet is constructed from 12mm MDF. Internal walls are painted white to maximize light distribution. A DIY activated carbon filter with a 120mm exhaust fan handles odor control. 
 
 <p align="center">
   <img src="docs/images/cabinet_front_closed.jpg" alt="Cabinet front closed" width="400"/>
@@ -89,12 +90,11 @@ The cabinet is constructed from 18mm MDF with a full-front door sealed with EPDM
 **Cabinet dimensions:**
 
 ```
-External:   380 × 380 × 850mm  (W × D × H)
-Internal:   342 × 342 × 814mm
-Wall:       18mm MDF
+External:   600 × 450 × 720mm  (W × D × H)
+Internal:   576 × 426 × 696mm  (external minus 2× 12mm MDF wall per axis)
+Wall:       12mm MDF
 
-LED panel:  mounted at top, 10mm clearance minimum to plants
-Usable grow height: ~500mm (accounting for pot + light clearance)
+LED panel:  mounted at top
 
 Fan intake:  120mm, bottom-right panel
 Fan exhaust: 120mm, top-right panel
@@ -115,12 +115,12 @@ Carbon filter: 3D printed housing, 80mm depth activated carbon bed,
                                   │
                                   │ 20V @ up to 5A
                                   ▼
-                    ┌─────────────────────────────┐
+                    ┌──────────────────────────────┐
                     │        MAIN HUB BOARD        │
                     │                              │
                     │  FUSB302 ──► 20V rail        │
                     │  ESP32-S3                    │
-                    │  SY8120B ──► 3.3V logic      │
+                    │  AP63203 Buck ──► 3.3V logic │
                     │  AHT20 sensor board (ext.)   │
                     │  ESP32-CAM (ext. via UART)   │
                     └──────────┬───────────────────┘
@@ -129,9 +129,9 @@ Carbon filter: 3D printed housing, 80mm depth activated carbon bed,
                │               │               │
                ▼               ▼               ▼
         LED Board 1      LED Board 2     LED Board 3+4
-       (3× TX6120)      (3× TX6120)     (3× TX6120 each)
-       15 LEDs           15 LEDs         15 LEDs each
-       ~16W              ~16W            ~16W each
+       (4× TX6120)      (4× TX6120)     (4× TX6120 each)
+       20 LEDs           20 LEDs         20 LEDs each
+       ~21.8W            ~21.8W          ~21.8W each
 ```
 
 All four LED driver boards receive:
@@ -169,7 +169,7 @@ The project consists of four custom PCBs, all designed in KiCad and manufactured
 | MCU | ESP32-S3 QFN-56 | Dual-core 240MHz, WiFi+BLE, USB JTAG |
 | Flash | GD25WQ64ESIGR | 8MB NOR SPI flash, WSON-8 |
 | PD controller | FUSB302UCX | USB-C PD sink, I2C controlled |
-| 3.3V regulator | SY8120B | 26V input, 1A buck |
+| 3.3V regulator | AP63203 | 32V input, 2A buck |
 | USB-C receptacle | 16-pin SMD | Power + CC1/CC2 for FUSB302 + D+/D- for JTAG |
 | Crystal | 40MHz ±10ppm | Required for bare SoC |
 
@@ -215,7 +215,7 @@ The project consists of four custom PCBs, all designed in KiCad and manufactured
 
 ### 2. LED Driver Board
 
-> One of four identical driver boards. Each carries 3× TX6120 buck constant-current LED drivers, powering 3 strings of 5 LEDs each (15 LEDs, ~16W per board).
+> One of four identical driver boards. Each carries 4× TX6120 buck constant-current LED drivers, powering 4 strings of 5 LEDs each (20 LEDs, ~21.8W per board).
 
 <p align="center">
   <img src="docs/images/pcb_driver_top.jpg" alt="Driver board top assembled" width="500"/>
@@ -233,7 +233,7 @@ The project consists of four custom PCBs, all designed in KiCad and manufactured
   <img src="docs/images/pcb_driver_array.jpg" alt="All 4 driver boards side by side" width="700"/>
 </p>
 
-**Per-channel design (×3 per board):**
+**Per-channel design (×4 per board):**
 
 | Component | Value | Purpose |
 |-----------|-------|---------|
@@ -251,8 +251,8 @@ The project consists of four custom PCBs, all designed in KiCad and manufactured
 ```
 I_LED = Vcs / R2 = 0.255V / 0.75Ω = 340mA per string
 Power per string = 5 LEDs × 3.2V × 0.340A = 5.44W
-Power per board  = 3 strings × 5.44W = 16.3W
-Total (4 boards) = 4 × 16.3W = 65.3W at 100% PWM
+Power per board  = 4 strings × 5.44W = 21.76W
+Total (4 boards) = 4 × 21.76W = 87W at 100% PWM
 ```
 
 **Connectors:**
@@ -261,13 +261,13 @@ Total (4 boards) = 4 × 16.3W = 65.3W at 100% PWM
 |-----------|------|--------|
 | J1 | JST VH 2-pin | 20V power in from hub |
 | J2 | JST XH 2-pin | DIM_PWM + GND from hub |
-| J3–J11 | JST XH 2-pin | LED+ and LED- per string (3 strings out) |
+| J3–J6 | JST XH 2-pin | LED+ and LED- per string (4 strings out) |
 
 ---
 
 ### 3. LED Panel Board
 
-> One of four identical LED boards. Each carries 15× XL-3030WWC-1W-3V warm white LEDs in a 3×5 grid, mounted on FR4 with thermal vias under every LED pad and a B.Cu copper pour on the back side for heat spreading. An aluminum plate is bolted to the back of each board with thermal paste.
+> One of four identical LED boards. Each carries 20× XL-3030WWC-1W-3V warm white LEDs. Mounted on FR4 Board with aluminium bottom layer, so single layer board.
 
 <p align="center">
   <img src="docs/images/pcb_led_top_off.jpg" alt="LED board not powered" width="500"/>
@@ -278,7 +278,7 @@ Total (4 boards) = 4 × 16.3W = 65.3W at 100% PWM
 <p align="center">
   <img src="docs/images/led_front.PNG" alt="LED board KiCad 3D render" width="500"/>
   &nbsp;&nbsp;
-  <img src="docs/images/led_back.PNG" alt="LED board back showing copper pour and aluminum plate" width="500"/>
+  <img src="docs/images/led_back.PNG" alt="LED board back showing copper pour and aluminum bottom layer" width="500"/>
 </p>
 
 <p align="center">
@@ -296,7 +296,7 @@ Total (4 boards) = 4 × 16.3W = 65.3W at 100% PWM
 | Rated current | 350mA |
 | Operating current | 340mA (98% rated) |
 | Color temperature | 2800–3200K warm white |
-| Count per board | 15 (3 strings × 5 series) |
+| Count per board | 20 (4 strings × 5 series) |
 
 **Thermal design:**
 
@@ -309,7 +309,7 @@ B.Cu copper pour (full board flood)
       │
 Thermal paste (Shin-Etsu X-23 or equivalent)
       │
-3mm aluminum plate (bolted through 4 corner M3 holes)
+Aluminum bottom layer (integral to the board — not a separate plate)
 ```
 
 **Board dimensions:** 85 × 55mm, FR4 1.6mm, HASL finish
@@ -649,67 +649,30 @@ Mount the ESP32-CAM on the interior cabinet wall at approximately 2/3 height, an
 
 | Brightness | LED power | Total estimated wall draw |
 |-----------|----------|--------------------------|
-| 40% | 26W | ~30W |
-| 50% | 32.5W | ~37W |
-| 65% | 42.3W | ~47W |
-| 75% | 48.8W | ~54W |
-| 85% | 55.3W | ~61W |
-| 100% | 65W | ~72W |
+| 40% | 34.8W | ~40W |
+| 50% | 43.5W | ~49W |
+| 65% | 56.6W | ~62W |
+| 75% | 65.3W | ~70W |
+| 85% | 74.0W | ~79W |
+| 100% | 87W | ~92W |
 
 ---
 
 ## Bill of Materials
 
-### Hub Board
+| Category | Notes | Approx. cost |
+|----------|-------|--------------|
+| Hub board | ESP32-S3, FUSB302, 8MB flash, USB-C, passives | ~€7 |
+| LED driver boards ×4 | 16× TX6120 total (4 per board) | ~€11 |
+| LED panel boards ×4 | 80× warm white LEDs total, aluminum-bottom single-layer boards | ~€7 |
+| Sensor board | AHT20 + passives | ~€1 |
+| ESP32-CAM module | | ~€3 |
+| 100W GaN USB-C charger | | ~€20 |
+| 120mm PC fans ×2 | | ~€6 |
+| Cabinet | MDF, hardware, reflective film, door seal | ~€35 |
+| Misc. | JST cables, activated carbon | ~€7 |
 
-| Component | Part | LCSC | Qty | Unit | Total |
-|-----------|------|------|-----|------|-------|
-| ESP32-S3 SoC | ESP32-S3 QFN-56 | — | 1 | ~€2.50 | €2.50 |
-| NOR Flash | GD25WQ64ESIGR | — | 1 | ~€0.80 | €0.80 |
-| PD controller | FUSB302UCX | C481901 | 1 | €0.46 | €0.46 |
-| 3.3V buck | SY8120B | — | 1 | €0.15 | €0.15 |
-| Crystal 40MHz | ±10ppm | — | 1 | €0.20 | €0.20 |
-| USB-C receptacle | 16P SMD | C165948 | 1 | €0.18 | €0.18 |
-| AHT20 (on sensor board) | AHT20 | C2757724 | 1 | €0.58 | €0.58 |
-| Passives + connectors | — | — | — | — | ~€2.00 |
-| **Hub total** | | | | | **~€6.87** |
-
-### LED Driver Boards (×4)
-
-| Component | Part | LCSC | Qty/board | Unit | Per board | ×4 |
-|-----------|------|------|----------|------|----------|-----|
-| TX6120 driver | TX6120 ESOP-8 | C329272 | 3 | €0.26 | €0.78 | €3.12 |
-| Inductor 330µH | Isat ≥500mA shielded | — | 3 | €0.25 | €0.75 | €3.00 |
-| Schottky SS14 | 1A 40V SOD-123 | C2480 | 3 | €0.03 | €0.09 | €0.36 |
-| R_sense 0.75Ω | 1% 0603 | — | 3 | €0.02 | €0.06 | €0.24 |
-| R_VDD 7.2kΩ | 1% 0805 | — | 3 | €0.01 | €0.03 | €0.12 |
-| C_in 10µF 25V | X7R 0805 | — | 3 | €0.03 | €0.09 | €0.36 |
-| Passives + connectors | — | — | — | — | €0.30 | €1.20 |
-| **Per board** | | | | | **€2.10** | **€8.40** |
-
-### LED Panel Boards (×4)
-
-| Component | Part | LCSC | Qty/board | Unit | Per board | ×4 |
-|-----------|------|------|----------|------|----------|-----|
-| Warm white LED | XL-3030WWC-1W-3V | C2843893 | 15 | €0.034 | €0.51 | €2.04 |
-| Connectors + passives | — | — | — | — | €0.20 | €0.80 |
-| **Per board** | | | | | **€0.71** | **€2.84** |
-
-### Other
-
-| Item | Cost |
-|------|------|
-| ESP32-CAM module | ~€3.00 |
-| 100W GaN USB-C charger | ~€20.00 |
-| 120mm PC fans ×2 | ~€6.00 |
-| JST cables and connectors | ~€3.00 |
-| Aquarium activated carbon | ~€4.00 |
-| MDF + hardware for cabinet | ~€25.00 |
-| Mylar reflective film | ~€5.00 |
-| Aluminum backing plates ×4 | ~€4.00 |
-| EPDM door seal + latches | ~€5.00 |
-
-**Total estimated build cost: ~€95–110**
+**Total estimated build cost: ~€95–105**
 
 ---
 
