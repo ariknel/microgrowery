@@ -166,7 +166,7 @@ A minimal standalone board carrying just the AHT20 temperature/humidity sensor, 
 A single self-contained HTML file served directly from ESP32-S3 flash — no internet connection required. Access it at `http://growbox.local` from any device on the same WiFi network.
 
 <p align="center">
-  <img src="docs/images/dashboard_full.jpg" alt="Full dashboard screenshot" width="700"/>
+  <img src="docs/images/dashboard_full.jpg" alt="Full dashboard screenshot" width="400" height="300"/>
 </p>
 <p align="center">
   <img src="docs/images/dashboard_login.PNG" alt="Dashboard Mobile Login Page" width="700"/>
