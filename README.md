@@ -168,6 +168,9 @@ A single self-contained HTML file served directly from ESP32-S3 flash — no int
 <p align="center">
   <img src="docs/images/dashboard_full.jpg" alt="Full dashboard screenshot" width="700"/>
 </p>
+<p align="center">
+  <img src="docs/images/dashboard_full.jpg" alt="Dashboard Mobile Login Page" width="700"/>
+</p>
 
 <p align="center">
   <img src="docs/images/dashboard_mobile.jpg" alt="Dashboard on mobile" width="300"/>
