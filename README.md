@@ -146,7 +146,7 @@ One of four identical boards — 20× XL-3030WWC-1W-3V warm white LEDs each (80 
 </p>
 
 <p align="center">
-  <img src="docs/images/pcb_led_panel_assembled.jpg" alt="All 4 LED boards assembled in 2x2 arrangement" width="700"/>
+  <img src="docs/images/led_4.PNG" alt="All 4 LED boards assembled in 2x2 arrangement" width="700"/>
 </p>
 
 ### 4. Sensor Board
