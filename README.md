@@ -148,6 +148,16 @@ One of four identical boards — 20× XL-3030WWC-1W-3V warm white LEDs each (80 
 <p align="center">
   <img src="docs/images/led_4.PNG" alt="All 4 LED boards assembled in 2x2 arrangement" width="700"/>
 </p>
+<p align="center">
+  <img src="docs/images/fan_with_shroud_heatsink.PNG" alt="Added heatsinks with 5020 fan attached (4x fans + fan duct, 20x20x80 heatsink 2x per LED pcb)" width="700"/>
+</p>
+
+At 21.76W per board on an 85×55mm footprint, passive cooling alone isn't
+enough to sustain full brightness — each board got 2× extruded aluminum
+heatsinks and a dedicated ducted 3600rpm blower. Estimated safe continuous
+power: ~4W bare board, ~11W with heatsinks only, full 87W-panel brightness
+(100%) with the fan running. Full thermal model and assumptions:
+[BUILD.md#thermal-analysis--led-board-cooling](BUILD.md#thermal-analysis--led-board-cooling).
 
 ### 4. Sensor Board
 

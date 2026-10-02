@@ -381,3 +381,63 @@ Estimated power at different LED brightness levels:
 | 75% | 65.3W | ~70W |
 | 85% | 74.0W | ~79W |
 | 100% | 87W | ~92W |
+
+## Thermal analysis — LED board cooling
+
+Each LED board dissipates 21.76W at 100% brightness (20× XL-3030WWC-1W-3V,
+1.088W each — see [LED Panel Board](#3-led-panel-board)) through an 85×55mm
+single-layer FR4 board with an aluminum bottom layer, no separate bolted-on
+plate. That's roughly 4.6W/cm² of board area, which is a lot of heat flux
+for passive cooling at that footprint — hence the heatsink + fan retrofit
+(2× 20×20×80mm extruded aluminum heatsinks per board, each pasted to the
+aluminum backing, fed by a dedicated 3600rpm 5020 blower through a ~200mm
+duct run in series across both heatsinks — see photo above).
+
+**Disclaimer:** no published thermal-resistance datasheet exists for this
+exact XINGLIGHT LED SKU, for a generic 20×20×80mm heatsink, or for this
+specific blower/duct combination. The figures below are an engineering
+estimate built from the board's real electrical data (this doc) plus
+typical thermal-resistance ranges for parts in this class — not a lab
+measurement. Validate with a thermocouple or IR thermometer on the real
+board before trusting these as hard limits.
+
+**Model:**
+```
+T_junction = T_ambient + P_board × R_board-to-ambient + (P_board / 20) × R_led(j-to-solderpoint)
+```
+- R_led(j-sp) ≈ 8–15°C/W (typical for a 1W SMD-3030 package), 12°C/W used as the mid estimate
+- T_ambient assumed 30°C cabinet interior — rescale linearly for your measured ambient
+- Target ceilings: 125°C = typical absolute Tj max for this LED class (hard limit, not for sustained use); 105°C = recommended sustained limit for reasonable lumen-maintenance/lifetime
+
+| Cooling stage | R_board-ambient (est.) | Max continuous W/board @105°C | Max continuous W/board @125°C | As brightness % |
+|---|---|---|---|---|
+| Bare board, no heatsink | ~18°C/W (14–24) | ~4W (3–5W) | ~5W (4–7W) | ~18–23% |
+| + 2× heatsink, no fan (natural convection) | ~6°C/W (4–9) | ~11W (8–17W) | ~14W (10–22W) | ~50–66% |
+| + heatsink + 3600rpm blower + duct (forced air) | ~2°C/W (1.2–3) | full 21.76W, Tj ≈ 87°C | full 21.76W, Tj ≈ 87°C | 100% |
+
+The bare-board figure confirms the heatsinks weren't optional — without
+them the board is thermally limited to roughly a fifth of rated power.
+Heatsinks alone roughly triple the safe ceiling but likely still can't
+sustain 100% brightness on natural convection. With the fan, heat stops
+being the limiting factor at all — the driver's 340mA current-sense
+ceiling becomes the real limit instead.
+
+**One geometry detail that matters:** the duct is a single pass feeding
+both heatsinks in series, not a Y-split to each individually, so the
+downstream heatsink gets air that's already picked up heat from the
+upstream one. Accounting for that asymmetry (~half the board's heat,
+10.9W, through each heatsink zone; downstream assumed 30–40% less
+effective due to pre-warmed inlet air):
+
+| Heatsink position | Est. junction temp at 100% brightness |
+|---|---|
+| Upstream (fresh air from blower) | ~80°C |
+| Downstream (pre-warmed air from first heatsink) | ~95°C |
+
+Worst case (the downstream end of the duct) still lands under the 105°C
+recommended ceiling, with roughly 10°C of margin — thinner than a naive
+symmetric-heatsink estimate would suggest, and worth spot-checking in
+person at that specific spot rather than assuming it from the model. If
+more margin is ever needed, splitting the duct so both heatsinks draw
+fresh air in parallel instead of in series would even out — and lower —
+the hottest point.
