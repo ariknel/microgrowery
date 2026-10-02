@@ -195,7 +195,9 @@ A single self-contained HTML file served directly from ESP32-S3 flash — no int
 ## Camera Feed
 
 The ESP32-CAM mounts on the interior cabinet wall via a 3D printed bracket, angled downward to cover the full plant canopy, connected to the hub over a 4-wire UART cable. It streams on demand only — power-saving start/stop commands are sent as the dashboard opens and closes the feed. Protocol details in [BUILD.md](BUILD.md).
-
+<p align="center">
+  <img src="docs/images/esp32cam shell.PNG" alt="ESP32-CAM Mount CAD" width="500"/>
+</p>
 <p align="center">
   <img src="docs/images/camera_mount.jpg" alt="ESP32-CAM mounted inside cabinet" width="500"/>
 </p>
