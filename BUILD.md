@@ -224,17 +224,17 @@ transmission and saving power.
 
 ### ESP32-CAM setup
 
-Runs independently on the same WiFi network. Flash it with ESP32-CAM-WebServer
-firmware modified to:
+Has no network connectivity of its own — see [esp32cam/README.md](esp32cam/README.md)
+for the actual firmware (bare ESP-IDF, not ESP32-CAM-WebServer). Everything
+goes over the dedicated UART link to the hub:
 
-1. Connect to the same WiFi network as the hub
-2. Send its IP address over UART at 921600 baud on boot: `{"cam_ip":"192.168.1.x"}\n`
-3. Accept stream start/stop commands over UART: `{"cmd":"stream","state":1}`
-4. Output QVGA (320×240) JPEG frames framed as: `0xFF 0xD8` [4-byte big-endian length] [JPEG data] `0xFF 0xD9`
+1. Announces it's up over UART at 921600 baud on boot: `{"ready":true}\n`
+2. Accepts stream start/stop commands over UART: `{"cmd":"stream","state":1}`
+3. Outputs QVGA (320×240) JPEG frames framed as: `0xFF 0xD8` [4-byte big-endian length] [JPEG data] `0xFF 0xD9`
 
-The hub stores the camera IP in RAM on receipt and uses it to build the
-stream proxy URL. Assign the ESP32-CAM a static IP in your router for
-reliability.
+The hub tracks camera liveness in RAM from the `ready` message and from
+frames actually arriving — there's no IP address anywhere in this picture,
+since the video never leaves the UART link.
 
 **Mounting:** interior cabinet wall, ~2/3 height, angled 30–45° downward
 toward canopy center. 3D printed bracket with a snap-fit slot; run the

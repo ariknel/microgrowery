@@ -3,16 +3,11 @@ idf_component_register(
         "main.c"
         "camera.c"
         "uart_link.c"
-        "wifi_link.c"
         "flash_led.c"
     INCLUDE_DIRS "."
     REQUIRES
         freertos
         driver
-        esp_wifi
-        esp_event
-        esp_netif
-        nvs_flash
         json
         esp_timer
         esp32-camera

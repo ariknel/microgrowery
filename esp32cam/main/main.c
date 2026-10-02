@@ -1,11 +1,9 @@
 #include "esp_log.h"
-#include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 #include "camera.h"
 #include "uart_link.h"
-#include "wifi_link.h"
 #include "flash_led.h"
 
 static const char *TAG = "main";
@@ -41,26 +39,13 @@ static void stream_task(void *arg)
 
 void app_main(void)
 {
-    ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(camera_init());
     ESP_ERROR_CHECK(uart_link_init());
     ESP_ERROR_CHECK(flash_led_init());
 
-    /* No WiFi config on this board at all — block here until the hub
-     * sends one over UART (it resends a few times at its own boot in
-     * case this board's UART wasn't listening yet for the first one). */
-    ESP_LOGI(TAG, "waiting for WiFi credentials from hub...");
-    char ssid[33] = { 0 };
-    char pass[65] = { 0 };
-    uart_link_wait_for_wifi_creds(ssid, sizeof(ssid), pass, sizeof(pass));
-    ESP_LOGI(TAG, "received credentials for '%s'", ssid);
-
-    char ip[16] = { 0 };
-    ESP_ERROR_CHECK(wifi_connect_blocking(ssid, pass, ip, sizeof(ip)));
-    uart_link_send_cam_ip(ip);
-
     xTaskCreatePinnedToCore(uart_link_command_task, "cam_cmd_task", 4096, NULL, 5, NULL, 0);
     xTaskCreatePinnedToCore(stream_task, "cam_stream_task", 4096, NULL, 4, NULL, 1);
+    uart_link_send_ready();
 
     ESP_LOGI(TAG, "camera module ready");
 }

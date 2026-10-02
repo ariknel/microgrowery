@@ -32,11 +32,10 @@ esp_err_t uart_link_init(void)
                          UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 }
 
-void uart_link_send_cam_ip(const char *ip)
+void uart_link_send_ready(void)
 {
-    char line[64];
-    int len = snprintf(line, sizeof(line), "{\"cam_ip\":\"%s\"}\n", ip);
-    uart_write_bytes(CAM_UART_PORT, line, len);
+    static const char line[] = "{\"ready\":true}\n";
+    uart_write_bytes(CAM_UART_PORT, line, sizeof(line) - 1);
 }
 
 /* Framing the hub expects: 0xFF 0xD8 [4-byte big-endian length] [JPEG] 0xFF 0xD9 */
@@ -57,8 +56,7 @@ void uart_link_send_frame(camera_fb_t *fb)
     uart_write_bytes(CAM_UART_PORT, (const char *)trailer, sizeof(trailer));
 }
 
-/* Blocks until a full newline-terminated line has been read. Shared by the
- * ongoing command loop and the one-shot wait-for-WiFi-creds call at boot. */
+/* Blocks until a full newline-terminated line has been read. */
 static void read_line_blocking(char *line, size_t line_size)
 {
     size_t pos = 0;
@@ -105,30 +103,6 @@ void uart_link_command_task(void *arg)
     for (;;) {
         read_line_blocking(line, sizeof(line));
         handle_command(line);
-    }
-}
-
-void uart_link_wait_for_wifi_creds(char *ssid_out, size_t ssid_len, char *pass_out, size_t pass_len)
-{
-    char line[200];
-    ssid_out[0] = '\0';
-    pass_out[0] = '\0';
-
-    for (;;) {
-        read_line_blocking(line, sizeof(line));
-
-        cJSON *root = cJSON_Parse(line);
-        if (!root) continue;
-
-        cJSON *ssid = cJSON_GetObjectItemCaseSensitive(root, "wifi_ssid");
-        if (cJSON_IsString(ssid) && ssid->valuestring[0] != '\0') {
-            cJSON *pass = cJSON_GetObjectItemCaseSensitive(root, "wifi_pass");
-            strncpy(ssid_out, ssid->valuestring, ssid_len - 1);
-            strncpy(pass_out, cJSON_IsString(pass) ? pass->valuestring : "", pass_len - 1);
-            cJSON_Delete(root);
-            return;
-        }
-        cJSON_Delete(root);
     }
 }
 

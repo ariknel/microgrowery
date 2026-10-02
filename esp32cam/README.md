@@ -8,14 +8,13 @@ toolchain install needed.
 
 ## What it does
 
-1. Has no WiFi configuration of its own. At boot it blocks on UART until
-   the hub sends `{"wifi_ssid":"...","wifi_pass":"..."}` — the hub reads
-   this from its own NVS and relays it over automatically, so there's
-   nothing to configure here.
-2. Connects to that network and announces its IP over UART:
-   `{"cam_ip":"x.x.x.x"}\n`. The hub only uses this as a liveness
-   signal — the actual video never leaves UART, so the IP value itself
-   isn't used for routing.
+1. Has no network connectivity at all — no WiFi hardware is configured on
+   this board. Everything it does (video out, commands in) goes over the
+   dedicated UART link to the hub, so there's no IP address anywhere in
+   this picture.
+2. Announces it's up and ready over UART once at boot: `{"ready":true}\n`.
+   The hub uses this purely as a liveness signal to know the camera board
+   has booted and is listening.
 3. Listens on that same UART for commands from the hub:
    - `{"cmd":"stream","state":1}` — start streaming (~3fps QVGA JPEG)
    - `{"cmd":"stream","state":0}` — stop
@@ -64,8 +63,8 @@ GND), **plus GPIO0 pulled to GND** to enter download mode:
 
 ## Build
 
-No WiFi setup step needed — this board gets its credentials from the hub
-over UART at boot (see "What it does" above), not from a build-time config.
+No config step needed — this board has no network settings at all (see
+"What it does" above).
 
 ```bash
 docker compose run --rm build
@@ -123,8 +122,3 @@ not the devcontainer's own.
 - Frame rate (~3fps) is a fixed delay between captures, not adaptive to
   actual encode time — fine for a grow-cabinet monitor, not tuned for
   anything faster.
-- WiFi credentials arrive once, at boot, over a bare UART line with no
-  ack/retry — the hub sends a short burst (3x, 500ms apart) to cover the
-  normal startup race, but if this board resets on its own hours into
-  operation while the hub stays up, it'll sit waiting for credentials
-  that won't come again until the hub itself reboots too.

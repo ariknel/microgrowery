@@ -71,11 +71,53 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
     }
 }
 
+/* Brings up the same setup AP alongside STA (APSTA mode) without tearing
+ * down the ongoing STA retry loop — lets the device stay reachable (over
+ * the existing dashboard httpd, already running regardless of STA state)
+ * even if the stored WiFi credentials are wrong or that network is down.
+ * There's no dedicated reconfiguration form wired up in the dashboard yet
+ * — POST /api/config/wifi exists and is reachable over this AP, but you'd
+ * need to call it directly (curl, etc.) rather than through a UI button. */
+static void start_fallback_ap(void)
+{
+    esp_netif_create_default_wifi_ap();
+
+    wifi_config_t ap_config = {
+        .ap = {
+            .ssid = WIFI_AP_SSID,
+            .ssid_len = strlen(WIFI_AP_SSID),
+            .password = WIFI_AP_PASS,
+            .max_connection = 4,
+            .authmode = WIFI_AUTH_WPA2_PSK,
+        },
+    };
+
+    esp_err_t err = esp_wifi_set_mode(WIFI_MODE_APSTA);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "failed to switch to APSTA: %s", esp_err_to_name(err));
+        return;
+    }
+    err = esp_wifi_set_config(WIFI_IF_AP, &ap_config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "failed to configure fallback AP: %s", esp_err_to_name(err));
+        return;
+    }
+
+    ESP_LOGW(TAG, "STA still not connected after %ds, fallback AP '%s' up at "
+                  "192.168.4.1 (STA retries continue in the background)",
+             WIFI_FALLBACK_AP_DELAY_MS / 1000, WIFI_AP_SSID);
+}
+
 static void wifi_task(void *arg)
 {
+    TickType_t sta_attempt_start = xTaskGetTickCount();
+    bool fallback_ap_started = false;
+    bool was_connected = false;
+
     for (;;) {
         EventBits_t bits = xEventGroupGetBits(s_wifi_events);
         if (bits & WIFI_CONNECTED_BIT) {
+            was_connected = true;
             wifi_ap_record_t info;
             if (esp_wifi_sta_get_ap_info(&info) == ESP_OK) {
                 state_lock();
@@ -84,6 +126,22 @@ static void wifi_task(void *arg)
             }
             vTaskDelay(pdMS_TO_TICKS(5000));
         } else {
+            /* Restart the fallback-AP countdown from the moment THIS
+             * disconnection began, not from when the task first started —
+             * otherwise a drop after days of being happily connected would
+             * fire the AP almost instantly (elapsed-since-boot already far
+             * exceeds the delay) instead of giving this reconnect attempt
+             * its own few-second grace period. */
+            if (was_connected) {
+                sta_attempt_start = xTaskGetTickCount();
+                was_connected = false;
+            }
+
+            if (!fallback_ap_started &&
+                (xTaskGetTickCount() - sta_attempt_start) > pdMS_TO_TICKS(WIFI_FALLBACK_AP_DELAY_MS)) {
+                start_fallback_ap();
+                fallback_ap_started = true;
+            }
             ESP_LOGI(TAG, "not connected, retrying in %d ms", WIFI_RETRY_INTERVAL_MS);
             esp_wifi_connect();
             vTaskDelay(pdMS_TO_TICKS(WIFI_RETRY_INTERVAL_MS));

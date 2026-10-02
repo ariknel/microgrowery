@@ -127,19 +127,23 @@ static esp_err_t api_sensors_get_handler(httpd_req_t *req)
 
 static esp_err_t api_camera_get_handler(httpd_req_t *req)
 {
-    char cam_ip[CAM_IP_MAXLEN];
     bool online;
     state_lock();
-    strncpy(cam_ip, g_state.cam_ip, sizeof(cam_ip));
     online = g_state.cam_online;
     state_unlock();
 
     cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "cam_ip", cam_ip);
     cJSON_AddBoolToObject(root, "online", online);
-    /* "/stream" is this device's own proxy endpoint, not the cam's raw
-     * address — the browser never talks to the ESP32-CAM directly. */
-    cJSON_AddStringToObject(root, "stream_url", cam_ip[0] ? "/stream" : "");
+    /* "/stream" is this device's own proxy endpoint, always served by the
+     * hub itself regardless of camera liveness — the browser never talks
+     * to the ESP32-CAM directly, which has no network of its own. Handed
+     * out unconditionally (not gated on `online`) because that flag comes
+     * from a one-shot "ready" message with no retry; the dashboard's own
+     * img-retry-with-backoff already copes with the camera not being
+     * ready yet, so gating the URL on it too would just be a second,
+     * redundant point where a single lost message could hide the stream
+     * for the rest of the boot. */
+    cJSON_AddStringToObject(root, "stream_url", "/stream");
     return send_json(req, root);
 }
 
@@ -250,7 +254,6 @@ static esp_err_t api_status_get_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(root, "grow_day", schedule_grow_day());
     cJSON_AddBoolToObject(root, "lights_on", snap.lights_on);
     cJSON_AddNumberToObject(root, "minutes_until_transition", snap.minutes_until_transition);
-    cJSON_AddStringToObject(root, "cam_ip", snap.cam_ip);
     cJSON_AddBoolToObject(root, "cam_online", snap.cam_online);
     cJSON_AddNumberToObject(root, "heap_free", esp_get_free_heap_size());
     cJSON_AddStringToObject(root, "firmware_version", snap.firmware_version);

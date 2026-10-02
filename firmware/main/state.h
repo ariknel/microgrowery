@@ -3,7 +3,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define CAM_IP_MAXLEN 16
 #define FW_VERSION_MAXLEN 16
 
 typedef struct {
@@ -30,8 +29,7 @@ typedef struct {
     bool wifi_connected;
     int8_t wifi_rssi;
 
-    /* camera (ESP32-CAM over UART) */
-    char cam_ip[CAM_IP_MAXLEN];
+    /* camera (ESP32-CAM over UART, no network of its own) */
     bool cam_online;
 
     /* schedule */

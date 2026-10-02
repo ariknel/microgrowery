@@ -54,17 +54,6 @@ esp_err_t uart_cam_request_stream_stop(void)  { return send_cmd("{\"cmd\":\"stre
 esp_err_t uart_cam_request_snapshot(void)     { return send_cmd("{\"cmd\":\"snapshot\"}\n"); }
 esp_err_t uart_cam_request_flash(void)        { return send_cmd("{\"cmd\":\"flash\"}\n"); }
 
-esp_err_t uart_cam_send_wifi_creds(const char *ssid, const char *pass)
-{
-    char line[200];
-    int len = snprintf(line, sizeof(line), "{\"wifi_ssid\":\"%s\",\"wifi_pass\":\"%s\"}\n", ssid, pass);
-    if (len < 0 || (size_t)len >= sizeof(line)) {
-        ESP_LOGW(TAG, "wifi creds line too long, not sending");
-        return ESP_ERR_INVALID_SIZE;
-    }
-    return send_cmd(line);
-}
-
 static esp_err_t read_exact(uint8_t *buf, size_t len, TickType_t timeout)
 {
     size_t got = 0;
@@ -96,14 +85,12 @@ static void handle_json_line(uint8_t first_byte)
     cJSON *root = cJSON_Parse(line);
     if (!root) return;
 
-    cJSON *ip = cJSON_GetObjectItemCaseSensitive(root, "cam_ip");
-    if (cJSON_IsString(ip) && ip->valuestring) {
+    cJSON *ready = cJSON_GetObjectItemCaseSensitive(root, "ready");
+    if (cJSON_IsTrue(ready)) {
         state_lock();
-        strncpy(g_state.cam_ip, ip->valuestring, CAM_IP_MAXLEN - 1);
-        g_state.cam_ip[CAM_IP_MAXLEN - 1] = '\0';
         g_state.cam_online = true;
         state_unlock();
-        ESP_LOGI(TAG, "camera IP: %s", ip->valuestring);
+        ESP_LOGI(TAG, "camera board ready");
     }
     cJSON_Delete(root);
 }
@@ -167,22 +154,22 @@ static bool try_read_frame(void)
 static void uart_cam_task(void *arg)
 {
     TickType_t boot_deadline = xTaskGetTickCount() + pdMS_TO_TICKS(30000);
-    bool got_ip = false;
+    bool ready = false;
     state_lock();
-    got_ip = g_state.cam_ip[0] != '\0';
+    ready = g_state.cam_online;
     state_unlock();
 
-    while (!got_ip && xTaskGetTickCount() < boot_deadline) {
+    while (!ready && xTaskGetTickCount() < boot_deadline) {
         uint8_t marker;
         if (read_exact(&marker, 1, pdMS_TO_TICKS(500)) == ESP_OK && marker == '{') {
             handle_json_line(marker);
         }
         state_lock();
-        got_ip = g_state.cam_ip[0] != '\0';
+        ready = g_state.cam_online;
         state_unlock();
     }
-    if (!got_ip) {
-        ESP_LOGW(TAG, "no camera IP announcement within 30s; will keep listening");
+    if (!ready) {
+        ESP_LOGW(TAG, "no camera ready announcement within 30s; will keep listening");
     }
 
     for (;;) {
