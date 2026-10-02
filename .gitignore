@@ -5,7 +5,7 @@ firmware/build/
 firmware/managed_components/
 firmware/sdkconfig
 firmware/sdkconfig.old
-
+dashboard.html
 esp32cam/build/
 esp32cam/managed_components/
 esp32cam/sdkconfig
