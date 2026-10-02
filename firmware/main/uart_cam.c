@@ -5,6 +5,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "cJSON.h"
 #include "uart_cam.h"
 #include "state.h"
@@ -17,6 +18,13 @@ typedef struct {
 } cam_frame_t;
 
 static QueueHandle_t s_frame_queue;
+
+/* Last successfully received frame, kept around independently of the
+ * (single-consumer) frame queue so a frozen view has something to serve
+ * even while no one's actively pulling from the queue. */
+static SemaphoreHandle_t s_cache_mutex;
+static uint8_t *s_cached_frame = NULL;
+static size_t s_cached_frame_len = 0;
 
 esp_err_t uart_cam_init(void)
 {
@@ -40,6 +48,7 @@ esp_err_t uart_cam_init(void)
     if (err != ESP_OK) return err;
 
     s_frame_queue = xQueueCreate(UART_CAM_FRAME_QUEUE_DEPTH, sizeof(cam_frame_t));
+    s_cache_mutex = xSemaphoreCreateMutex();
     return ESP_OK;
 }
 
@@ -138,6 +147,19 @@ static bool try_read_frame(void)
         return true;
     }
 
+    uint8_t *cache_copy = malloc(frame_len);
+    if (cache_copy) {
+        memcpy(cache_copy, frame_buf, frame_len);
+        if (xSemaphoreTake(s_cache_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            free(s_cached_frame);
+            s_cached_frame = cache_copy;
+            s_cached_frame_len = frame_len;
+            xSemaphoreGive(s_cache_mutex);
+        } else {
+            free(cache_copy);
+        }
+    }
+
     cam_frame_t item = { .buf = frame_buf, .len = frame_len };
     if (xQueueSend(s_frame_queue, &item, 0) != pdTRUE) {
         cam_frame_t old;
@@ -191,4 +213,25 @@ esp_err_t uart_cam_get_frame(uint8_t **buf, size_t *len, uint32_t timeout_ms)
     *buf = item.buf;
     *len = item.len;
     return ESP_OK;
+}
+
+esp_err_t uart_cam_get_cached_frame(uint8_t **buf, size_t *len)
+{
+    esp_err_t result = ESP_ERR_NOT_FOUND;
+    if (xSemaphoreTake(s_cache_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+    if (s_cached_frame && s_cached_frame_len > 0) {
+        uint8_t *copy = malloc(s_cached_frame_len);
+        if (copy) {
+            memcpy(copy, s_cached_frame, s_cached_frame_len);
+            *buf = copy;
+            *len = s_cached_frame_len;
+            result = ESP_OK;
+        } else {
+            result = ESP_ERR_NO_MEM;
+        }
+    }
+    xSemaphoreGive(s_cache_mutex);
+    return result;
 }

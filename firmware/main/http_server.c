@@ -161,23 +161,89 @@ static esp_err_t api_camera_flash_post_handler(httpd_req_t *req)
     return send_json(req, resp);
 }
 
+/* ---------------- POST /api/camera/freeze (protected) ----------------
+   Freezes the (public) /stream on the last received frame for every
+   viewer — including the lock-screen preview, which shares this same
+   endpoint — instead of just hiding it in one browser tab. Gated behind
+   login, unlike the flash/preview endpoints above: this actually changes
+   what the camera shows everyone, not a read-only/momentary action. */
+
+static esp_err_t api_camera_freeze_post_handler(httpd_req_t *req)
+{
+    if (!require_auth(req)) return ESP_OK;
+
+    char body[64];
+    if (read_body(req, body, sizeof(body)) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad body");
+    }
+    cJSON *root = cJSON_Parse(body);
+    if (!root) return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad json");
+
+    cJSON *frozen = cJSON_GetObjectItemCaseSensitive(root, "frozen");
+    if (!cJSON_IsBool(frozen)) {
+        cJSON_Delete(root);
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing frozen");
+    }
+    bool want_frozen = cJSON_IsTrue(frozen);
+    cJSON_Delete(root);
+
+    state_lock();
+    g_state.cam_frozen = want_frozen;
+    state_unlock();
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "ok", true);
+    cJSON_AddBoolToObject(resp, "frozen", want_frozen);
+    return send_json(req, resp);
+}
+
 /* ---------------- GET /stream (public, proxied MJPEG) ---------------- */
 
 static esp_err_t stream_get_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "multipart/x-mixed-replace;boundary=frame");
-    uart_cam_request_stream_start();
+
+    bool frozen;
+    state_lock();
+    frozen = g_state.cam_frozen;
+    state_unlock();
+
+    bool live_active = !frozen;
+    if (live_active) uart_cam_request_stream_start();
 
     esp_err_t res = ESP_OK;
     for (;;) {
+        state_lock();
+        frozen = g_state.cam_frozen;
+        state_unlock();
+
         uint8_t *buf;
         size_t len;
-        if (uart_cam_get_frame(&buf, &len, 5000) != ESP_OK) {
-            ESP_LOGW(TAG, "no frame for 5s, stopping stream");
-            state_lock();
-            g_state.cam_online = false;
-            state_unlock();
-            break;
+
+        if (frozen) {
+            if (live_active) {
+                uart_cam_request_stream_stop();
+                live_active = false;
+            }
+            if (uart_cam_get_cached_frame(&buf, &len) != ESP_OK) {
+                /* Nothing captured yet this boot to freeze on — wait and
+                 * re-check rather than busy-loop; still re-checks `frozen`
+                 * every pass so unfreezing while here takes effect at once. */
+                vTaskDelay(pdMS_TO_TICKS(500));
+                continue;
+            }
+        } else {
+            if (!live_active) {
+                uart_cam_request_stream_start();
+                live_active = true;
+            }
+            if (uart_cam_get_frame(&buf, &len, 5000) != ESP_OK) {
+                ESP_LOGW(TAG, "no frame for 5s, stopping stream");
+                state_lock();
+                g_state.cam_online = false;
+                state_unlock();
+                break;
+            }
         }
 
         char header[64];
@@ -189,9 +255,11 @@ static esp_err_t stream_get_handler(httpd_req_t *req)
         if (res == ESP_OK) res = httpd_resp_send_chunk(req, "\r\n", 2);
         free(buf);
         if (res != ESP_OK) break; /* client disconnected */
+
+        if (frozen) vTaskDelay(pdMS_TO_TICKS(1000)); /* replay cache at ~1fps, no need for more */
     }
 
-    uart_cam_request_stream_stop();
+    if (live_active) uart_cam_request_stream_stop();
     httpd_resp_send_chunk(req, NULL, 0);
     return res;
 }
@@ -255,6 +323,7 @@ static esp_err_t api_status_get_handler(httpd_req_t *req)
     cJSON_AddBoolToObject(root, "lights_on", snap.lights_on);
     cJSON_AddNumberToObject(root, "minutes_until_transition", snap.minutes_until_transition);
     cJSON_AddBoolToObject(root, "cam_online", snap.cam_online);
+    cJSON_AddBoolToObject(root, "cam_frozen", snap.cam_frozen);
     cJSON_AddNumberToObject(root, "heap_free", esp_get_free_heap_size());
     cJSON_AddStringToObject(root, "firmware_version", snap.firmware_version);
     return send_json(req, root);
@@ -462,6 +531,7 @@ esp_err_t http_server_start(void)
         { .uri = "/api/sensors",       .method = HTTP_GET,  .handler = api_sensors_get_handler },
         { .uri = "/api/camera",        .method = HTTP_GET,  .handler = api_camera_get_handler },
         { .uri = "/api/camera/flash",  .method = HTTP_POST, .handler = api_camera_flash_post_handler },
+        { .uri = "/api/camera/freeze", .method = HTTP_POST, .handler = api_camera_freeze_post_handler },
         { .uri = "/stream",            .method = HTTP_GET,  .handler = stream_get_handler },
         { .uri = "/api/auth",          .method = HTTP_POST, .handler = api_auth_post_handler },
         { .uri = "/api/status",        .method = HTTP_GET,  .handler = api_status_get_handler },

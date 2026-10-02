@@ -97,6 +97,18 @@
     0%,100%{box-shadow:0 0 0 1px rgba(57,255,20,.25), 0 0 10px 0 rgba(57,255,20,.25);}
     50%{box-shadow:0 0 0 1px rgba(57,255,20,.5), 0 0 22px 4px rgba(57,255,20,.45);}
   }
+  .camera-frame.frozen{animation:none;box-shadow:none;}
+  .camera-frame.frozen::after{
+    content:"FROZEN";
+    position:absolute;top:8px;right:8px;
+    background:rgba(0,0,0,.6);color:#fff;font-size:.65rem;font-weight:700;
+    letter-spacing:.06em;padding:3px 9px;border-radius:999px;
+    pointer-events:none;
+  }
+  .freeze-row{
+    display:flex;align-items:center;gap:8px;margin-left:auto;
+    font-size:.85rem;color:var(--text-dim);
+  }
   .camera-frame img{
     width:100%;height:100%;object-fit:cover;display:block;
   }
@@ -501,6 +513,13 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
         <span>Flash LED</span>
       </button>
+      <div class="freeze-row">
+        <span>Freeze</span>
+        <label class="switch">
+          <input type="checkbox" id="freezeToggle">
+          <span class="track"></span>
+        </label>
+      </div>
     </div>
   </div>
 
@@ -656,6 +675,7 @@
     schedule: { on:"20:00", off:"08:00", enabled:true },
     minMax: { tempMin:null, tempMax:null, humMin:null, humMax:null },
     cameraUrl: null,
+    camFrozen: false,
     plants: []
   };
 
@@ -674,7 +694,7 @@
    "lockTempVal","lockHumVal","lockCameraBtn",
    "lockCameraModal","lockCameraModalClose",
    "lockCameraFrame","lockCameraImg","lockCameraPlaceholder","lockCameraPlaceholderText",
-   "flashBtn","lockFlashBtn"
+   "flashBtn","lockFlashBtn","freezeToggle"
   ].forEach(function(id){ el[id] = document.getElementById(id); });
 
   /* ---------------- helpers ---------------- */
@@ -828,6 +848,31 @@
   }
   wireFlashButton(el.flashBtn);
 
+  /* ---------------- freeze ----------------
+     Protected (unlike flash/preview above) — toggling this changes what
+     every viewer of the public /stream sees, including the lock-screen
+     preview, not just a momentary local action. Main dashboard only. */
+
+  function setCamFrozenUI(frozen){
+    state.camFrozen = frozen;
+    if(el.freezeToggle) el.freezeToggle.checked = frozen;
+    el.cameraFrame.classList.toggle("frozen", frozen);
+  }
+
+  if(el.freezeToggle){
+    el.freezeToggle.addEventListener("change", function(){
+      var frozen = el.freezeToggle.checked;
+      setCamFrozenUI(frozen);
+      api("/api/camera/freeze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ frozen: frozen })
+      }).catch(function(){
+        setCamFrozenUI(!frozen); /* revert optimistic UI on failure */
+      });
+    });
+  }
+
   /* ---------------- sensors ---------------- */
 
   function updateMinMax(temp, hum){
@@ -871,6 +916,9 @@
     }
     if(typeof data.heap_free === "number"){
       fadeUpdate(el.heapText, (data.heap_free / 1024).toFixed(0) + " KB free");
+    }
+    if(typeof data.cam_frozen === "boolean"){
+      setCamFrozenUI(data.cam_frozen);
     }
   }
 

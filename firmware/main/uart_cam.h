@@ -27,3 +27,9 @@ esp_err_t uart_cam_request_flash(void);
 
 /* On ESP_OK, *buf is heap memory the caller owns and must free(). */
 esp_err_t uart_cam_get_frame(uint8_t **buf, size_t *len, uint32_t timeout_ms);
+
+/* Returns a heap copy (caller must free(*buf)) of the most recently
+ * received frame, independent of the live frame queue — used to serve a
+ * frozen view. ESP_ERR_NOT_FOUND if no frame has been received yet this
+ * boot. */
+esp_err_t uart_cam_get_cached_frame(uint8_t **buf, size_t *len);

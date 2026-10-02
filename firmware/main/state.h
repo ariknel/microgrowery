@@ -31,6 +31,10 @@ typedef struct {
 
     /* camera (ESP32-CAM over UART, no network of its own) */
     bool cam_online;
+    /* When true, /stream serves the last cached frame on a loop instead of
+     * live video — toggled from the dashboard, applies to every viewer of
+     * the (public) stream, not just the session that set it. */
+    bool cam_frozen;
 
     /* schedule */
     uint16_t sched_on_min;
