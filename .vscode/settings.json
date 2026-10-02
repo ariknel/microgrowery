@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "C:/Users/Arik/Desktop/microgrowery/firmware"
+    "cmake.sourceDirectory": "C:/Users/Arik/Desktop/microgrowery/firmware",
+    "idf.currentSetup": "/opt/esp/idf"
 }

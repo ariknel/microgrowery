@@ -105,7 +105,14 @@ Then:
 idf.py -p /dev/ttyUSB0 flash
 ```
 (swap in whichever port `ls` showed you.)
-
+idf.py flash
+or
+ idf.py -p PORT flash
+or
+ python -m esptool --chip esp32 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size 4MB --flash_freq 40m 0x1000 build/bootloader/bootloader.bin 0x8000 build/partition_table/partition-table.bin 0x10000 build/growbox_cam.bin
+or from the "/workspaces/microgrowery/esp32cam/build" directory
+ python -m esptool --chip esp32 -b 460800 --before default_reset --after hard_reset write_flash "@flash_args"
+root@1da86854c589:/workspaces/microgrowery/esp32cam# 
 ### 5. Monitor
 
 ```

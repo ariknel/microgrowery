@@ -1,0 +1,58 @@
+# Same pattern as the hub firmware's docker-compose.yml — build (and
+# optionally flash/monitor) through Espressif's official ESP-IDF image, no
+# local toolchain install needed.
+#
+# Usage:
+#   docker compose run --rm build
+#   docker compose run --rm menuconfig   # set WiFi SSID/password here
+#   docker compose run --rm flash        # needs USB passthrough, see README
+#   docker compose run --rm monitor
+#   docker compose run --rm shell
+#
+# PORT defaults to /dev/ttyUSB0 — override per-run:
+#   PORT=/dev/ttyACM0 docker compose run --rm flash
+
+x-idf-common: &idf-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  working_dir: /project
+  volumes:
+    - .:/project
+
+services:
+  build:
+    <<: *idf-common
+    command: idf.py build
+
+  menuconfig:
+    <<: *idf-common
+    stdin_open: true
+    tty: true
+    command: idf.py menuconfig
+
+  clean:
+    <<: *idf-common
+    command: idf.py fullclean
+
+  flash:
+    <<: *idf-common
+    devices:
+      - "${PORT:-/dev/ttyUSB0}:${PORT:-/dev/ttyUSB0}"
+    command: idf.py -p ${PORT:-/dev/ttyUSB0} flash
+
+  monitor:
+    <<: *idf-common
+    devices:
+      - "${PORT:-/dev/ttyUSB0}:${PORT:-/dev/ttyUSB0}"
+    stdin_open: true
+    tty: true
+    command: idf.py -p ${PORT:-/dev/ttyUSB0} monitor
+
+  shell:
+    <<: *idf-common
+    devices:
+      - "${PORT:-/dev/ttyUSB0}:${PORT:-/dev/ttyUSB0}"
+    stdin_open: true
+    tty: true
+    entrypoint: bash

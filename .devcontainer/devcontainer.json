@@ -5,19 +5,22 @@
     "dockerfile": "../Dockerfile"
   },
 
-  // Gives the container access to USB serial devices (the ESP32-S3) without
-  // having to know the exact /dev/ttyUSBx path ahead of time. This is the
-  // standard, well-tested pattern for serial-device devcontainers — it does
-  // mean the container has broad access to host devices, which is a fine
-  // tradeoff for a personal local dev container but worth knowing about.
-  "runArgs": ["--privileged"],
-  "mounts": [
-    "source=/dev,target=/dev,type=bind"
-  ],
+  // Deliberately no device/USB access here — a hard-coded `/dev` bind mount
+  // only resolves on a Linux Docker host, and breaks container *creation*
+  // entirely when Docker Desktop is driven from native Windows (no /dev
+  // there to bind from). Building/editing never needs the device anyway;
+  // flashing uses scripts/flash.sh from the host, or the docker-compose
+  // `flash`/`monitor` services (which scope their own `devices:` mapping
+  // to just those one-off runs) if you've set up WSL2 + usbipd passthrough.
 
-  // First container start only: pins the build target so `idf.py build`
-  // works immediately without a manual `idf.py set-target` step.
-  "postCreateCommand": "cd firmware && idf.py set-target esp32s3",
+  // postCreateCommand/VS Code's integrated terminal exec into the running
+  // container directly — they skip the espressif/idf image's own
+  // ENTRYPOINT, which is what sources export.sh to put idf.py on PATH.
+  // So every new shell has to source it itself: write it into both
+  // ~/.bashrc (VS Code's default non-login interactive terminal) and
+  // /etc/profile.d (in case a login shell is used instead), then source
+  // it once more here so set-target can actually run during creation.
+  "postCreateCommand": "echo 'source $IDF_PATH/export.sh' | tee -a /etc/profile.d/idf-export.sh ~/.bashrc >/dev/null; . $IDF_PATH/export.sh && cd firmware && idf.py set-target esp32s3",
 
   "customizations": {
     "vscode": {

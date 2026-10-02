@@ -322,14 +322,25 @@ Namespace: `growbox`
 ## Building and flashing
 
 Firmware lives in `firmware/`, built via Docker — no local ESP-IDF install
-needed. Open the repo root in VS Code and accept "Reopen in Container", or
-run manually from the repo root:
+needed. Open the repo root in VS Code and accept "Reopen in Container" to
+build from the integrated terminal (`idf.py build`), or run manually from
+the repo root:
 
 ```bash
 docker compose run --rm build
-docker compose run --rm flash     # needs USB passthrough — see .devcontainer notes
+docker compose run --rm flash     # needs USB passthrough — see docker-compose.yml's header comment
 docker compose run --rm monitor
 ```
+
+First build needs internet access once — `main/idf_component.yml` pulls
+in Espressif's `mdns` component from the registry (it moved out of core
+ESP-IDF as of the v5.2.x line, so it's no longer bundled).
+
+The dev container itself has no device access on purpose (a hard-coded
+device mount breaks container creation on Windows, where there's no real
+`/dev` for Docker Desktop to bind from) — flash and monitor from the host,
+or from a plain terminal using the `docker compose` commands above with
+USB passthrough set up.
 
 Or flash from the host directly (`pip install esptool`), which sidesteps
 USB passthrough entirely:

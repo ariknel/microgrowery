@@ -1,0 +1,25 @@
+{
+  "name": "GrowBox Camera Firmware (ESP-IDF)",
+  "build": {
+    "context": "..",
+    "dockerfile": "../Dockerfile"
+  },
+
+  // postCreateCommand/VS Code's integrated terminal exec into the running
+  // container directly — they skip the espressif/idf image's own
+  // ENTRYPOINT, which is what sources export.sh to put idf.py on PATH.
+  // So every new shell has to source it itself: write it into both
+  // ~/.bashrc (VS Code's default non-login interactive terminal) and
+  // /etc/profile.d (in case a login shell is used instead), then source
+  // it once more here so set-target can actually run during creation.
+  "postCreateCommand": "echo 'source $IDF_PATH/export.sh' | tee -a /etc/profile.d/idf-export.sh ~/.bashrc >/dev/null; . $IDF_PATH/export.sh && idf.py set-target esp32",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "espressif.esp-idf-extension"
+      ]
+    }
+  }
+}

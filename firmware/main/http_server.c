@@ -79,6 +79,10 @@ static bool require_auth(httpd_req_t *req)
 
 static void minutes_to_hhmm(uint16_t minutes, char *out)
 {
+    /* minutes is a full uint16_t to the compiler, so without this it can't
+     * prove hours stays 2 digits and flags a possible format truncation —
+     * callers already only ever pass 0-1439, this just makes that provable. */
+    minutes %= 1440;
     snprintf(out, 6, "%02d:%02d", minutes / 60, minutes % 60);
 }
 

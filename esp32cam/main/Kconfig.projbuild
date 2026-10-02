@@ -1,0 +1,15 @@
+menu "GrowBox Camera Configuration"
+
+    config GROWBOX_WIFI_SSID
+        string "WiFi SSID"
+        default "myssid"
+        help
+            Network to join — must be the same WiFi network as the GrowBox hub.
+
+    config GROWBOX_WIFI_PASSWORD
+        string "WiFi Password"
+        default "mypassword"
+        help
+            Password for the network above.
+
+endmenu
