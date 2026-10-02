@@ -4,6 +4,7 @@ idf_component_register(
         "camera.c"
         "uart_link.c"
         "wifi_link.c"
+        "flash_led.c"
     INCLUDE_DIRS "."
     REQUIRES
         freertos
@@ -13,5 +14,6 @@ idf_component_register(
         esp_netif
         nvs_flash
         json
+        esp_timer
         esp32-camera
 )

@@ -77,6 +77,20 @@ void app_main(void)
     ESP_ERROR_CHECK(schedule_init());
     ESP_ERROR_CHECK(uart_cam_init());
 
+    /* The camera board has no WiFi config of its own — it blocks at boot
+     * waiting for these over UART before connecting to anything. Fire a
+     * short burst rather than once: a single send can land before the
+     * camera's UART driver has finished initializing and get lost, since
+     * there's no ack/retry at this layer. */
+    char wifi_ssid[33] = { 0 };
+    char wifi_pass[65] = { 0 };
+    nvs_config_get_str("wifi_ssid", wifi_ssid, sizeof(wifi_ssid), "");
+    nvs_config_get_str("wifi_pass", wifi_pass, sizeof(wifi_pass), "");
+    for (int i = 0; i < 3; i++) {
+        uart_cam_send_wifi_creds(wifi_ssid, wifi_pass);
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+
     uart_cam_task_start(4, 1);
     pd_task_start(I2C_PORT, 5, 0);
     xTaskCreatePinnedToCore(sensor_task, "sensor_task", 2048, NULL, 3, NULL, 0);

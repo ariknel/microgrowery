@@ -17,6 +17,12 @@
 
 esp_err_t uart_link_init(void);
 
+/* Blocks until the hub sends {"wifi_ssid":"...","wifi_pass":"..."} — this
+ * board has no WiFi config of its own. Call before anything that needs
+ * the network. ssid_out/pass_out are left empty-stringed if the hub sends
+ * an open network (no password). */
+void uart_link_wait_for_wifi_creds(char *ssid_out, size_t ssid_len, char *pass_out, size_t pass_len);
+
 void uart_link_send_cam_ip(const char *ip);
 void uart_link_send_frame(camera_fb_t *fb);
 

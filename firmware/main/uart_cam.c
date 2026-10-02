@@ -52,6 +52,18 @@ static esp_err_t send_cmd(const char *json_line)
 esp_err_t uart_cam_request_stream_start(void) { return send_cmd("{\"cmd\":\"stream\",\"state\":1}\n"); }
 esp_err_t uart_cam_request_stream_stop(void)  { return send_cmd("{\"cmd\":\"stream\",\"state\":0}\n"); }
 esp_err_t uart_cam_request_snapshot(void)     { return send_cmd("{\"cmd\":\"snapshot\"}\n"); }
+esp_err_t uart_cam_request_flash(void)        { return send_cmd("{\"cmd\":\"flash\"}\n"); }
+
+esp_err_t uart_cam_send_wifi_creds(const char *ssid, const char *pass)
+{
+    char line[200];
+    int len = snprintf(line, sizeof(line), "{\"wifi_ssid\":\"%s\",\"wifi_pass\":\"%s\"}\n", ssid, pass);
+    if (len < 0 || (size_t)len >= sizeof(line)) {
+        ESP_LOGW(TAG, "wifi creds line too long, not sending");
+        return ESP_ERR_INVALID_SIZE;
+    }
+    return send_cmd(line);
+}
 
 static esp_err_t read_exact(uint8_t *buf, size_t len, TickType_t timeout)
 {

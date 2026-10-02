@@ -143,6 +143,20 @@ static esp_err_t api_camera_get_handler(httpd_req_t *req)
     return send_json(req, root);
 }
 
+/* ---------------- POST /api/camera/flash (public) ----------------
+   Triggers the camera board's onboard LED for a few seconds so it can be
+   found in person — not a device-state change worth gating behind auth,
+   same reasoning as /api/camera and /api/sensors being public. */
+
+static esp_err_t api_camera_flash_post_handler(httpd_req_t *req)
+{
+    uart_cam_request_flash();
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "ok", true);
+    return send_json(req, resp);
+}
+
 /* ---------------- GET /stream (public, proxied MJPEG) ---------------- */
 
 static esp_err_t stream_get_handler(httpd_req_t *req)
@@ -444,6 +458,7 @@ esp_err_t http_server_start(void)
         { .uri = "/",                  .method = HTTP_GET,  .handler = root_get_handler },
         { .uri = "/api/sensors",       .method = HTTP_GET,  .handler = api_sensors_get_handler },
         { .uri = "/api/camera",        .method = HTTP_GET,  .handler = api_camera_get_handler },
+        { .uri = "/api/camera/flash",  .method = HTTP_POST, .handler = api_camera_flash_post_handler },
         { .uri = "/stream",            .method = HTTP_GET,  .handler = stream_get_handler },
         { .uri = "/api/auth",          .method = HTTP_POST, .handler = api_auth_post_handler },
         { .uri = "/api/status",        .method = HTTP_GET,  .handler = api_status_get_handler },

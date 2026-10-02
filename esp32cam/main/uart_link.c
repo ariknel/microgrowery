@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "cJSON.h"
 #include "uart_link.h"
+#include "flash_led.h"
 
 static const char *TAG = "uart_link";
 static volatile bool s_streaming = false;
@@ -56,6 +57,26 @@ void uart_link_send_frame(camera_fb_t *fb)
     uart_write_bytes(CAM_UART_PORT, (const char *)trailer, sizeof(trailer));
 }
 
+/* Blocks until a full newline-terminated line has been read. Shared by the
+ * ongoing command loop and the one-shot wait-for-WiFi-creds call at boot. */
+static void read_line_blocking(char *line, size_t line_size)
+{
+    size_t pos = 0;
+    for (;;) {
+        uint8_t c;
+        int n = uart_read_bytes(CAM_UART_PORT, &c, 1, portMAX_DELAY);
+        if (n <= 0) continue;
+
+        if (c == '\n') {
+            line[pos] = '\0';
+            if (pos > 0) return;
+            pos = 0; /* blank line, keep waiting */
+        } else if (pos < line_size - 1) {
+            line[pos++] = (char)c;
+        }
+    }
+}
+
 static void handle_command(const char *line)
 {
     cJSON *root = cJSON_Parse(line);
@@ -70,6 +91,9 @@ static void handle_command(const char *line)
         } else if (strcmp(cmd->valuestring, "snapshot") == 0) {
             s_snapshot_requested = true;
             ESP_LOGI(TAG, "snapshot requested");
+        } else if (strcmp(cmd->valuestring, "flash") == 0) {
+            flash_led_trigger();
+            ESP_LOGI(TAG, "flash LED triggered");
         }
     }
     cJSON_Delete(root);
@@ -77,21 +101,34 @@ static void handle_command(const char *line)
 
 void uart_link_command_task(void *arg)
 {
-    char line[128];
-    size_t pos = 0;
+    char line[200];
+    for (;;) {
+        read_line_blocking(line, sizeof(line));
+        handle_command(line);
+    }
+}
+
+void uart_link_wait_for_wifi_creds(char *ssid_out, size_t ssid_len, char *pass_out, size_t pass_len)
+{
+    char line[200];
+    ssid_out[0] = '\0';
+    pass_out[0] = '\0';
 
     for (;;) {
-        uint8_t c;
-        int n = uart_read_bytes(CAM_UART_PORT, &c, 1, portMAX_DELAY);
-        if (n <= 0) continue;
+        read_line_blocking(line, sizeof(line));
 
-        if (c == '\n') {
-            line[pos] = '\0';
-            if (pos > 0) handle_command(line);
-            pos = 0;
-        } else if (pos < sizeof(line) - 1) {
-            line[pos++] = (char)c;
+        cJSON *root = cJSON_Parse(line);
+        if (!root) continue;
+
+        cJSON *ssid = cJSON_GetObjectItemCaseSensitive(root, "wifi_ssid");
+        if (cJSON_IsString(ssid) && ssid->valuestring[0] != '\0') {
+            cJSON *pass = cJSON_GetObjectItemCaseSensitive(root, "wifi_pass");
+            strncpy(ssid_out, ssid->valuestring, ssid_len - 1);
+            strncpy(pass_out, cJSON_IsString(pass) ? pass->valuestring : "", pass_len - 1);
+            cJSON_Delete(root);
+            return;
         }
+        cJSON_Delete(root);
     }
 }
 

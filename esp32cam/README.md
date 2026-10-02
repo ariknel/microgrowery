@@ -8,15 +8,21 @@ toolchain install needed.
 
 ## What it does
 
-1. Connects to WiFi (same network as the hub) and announces its IP over
-   UART: `{"cam_ip":"x.x.x.x"}\n`. The hub only uses this as a liveness
+1. Has no WiFi configuration of its own. At boot it blocks on UART until
+   the hub sends `{"wifi_ssid":"...","wifi_pass":"..."}` — the hub reads
+   this from its own NVS and relays it over automatically, so there's
+   nothing to configure here.
+2. Connects to that network and announces its IP over UART:
+   `{"cam_ip":"x.x.x.x"}\n`. The hub only uses this as a liveness
    signal — the actual video never leaves UART, so the IP value itself
    isn't used for routing.
-2. Listens on that same UART for commands from the hub:
+3. Listens on that same UART for commands from the hub:
    - `{"cmd":"stream","state":1}` — start streaming (~3fps QVGA JPEG)
    - `{"cmd":"stream","state":0}` — stop
    - `{"cmd":"snapshot"}` — capture and send exactly one frame
-3. Sends each JPEG frame framed as the hub expects:
+   - `{"cmd":"flash"}` — turn on the onboard LED (GPIO4) for 10s, then
+     auto-off; re-triggering while already on just extends the window
+4. Sends each JPEG frame framed as the hub expects:
    `0xFF 0xD8 [4-byte big-endian length] [JPEG bytes] 0xFF 0xD9`
 
 No local web server, no SD card, no direct connection from the browser —
@@ -56,18 +62,10 @@ GND), **plus GPIO0 pulled to GND** to enter download mode:
 6. Unplug the external programmer. From here on the board only talks to
    the hub over GPIO14/15.
 
-## Configure WiFi
-
-Set the SSID/password before building — same network as the hub:
-
-```bash
-docker compose run --rm menuconfig
-# → GrowBox Camera Configuration → WiFi SSID / WiFi Password
-```
-
-(Or edit `sdkconfig.defaults` directly before the first build.)
-
 ## Build
+
+No WiFi setup step needed — this board gets its credentials from the hub
+over UART at boot (see "What it does" above), not from a build-time config.
 
 ```bash
 docker compose run --rm build
@@ -119,16 +117,14 @@ not the devcontainer's own.
 - Pin mapping is the standard AI-Thinker layout, transcribed from the
   widely-used reference config — not yet bench-tested against real
   hardware.
-- No flash-LED control (GPIO4) — left unused since it doubles as an SD
-  card data line on this board and SD isn't used here anyway.
+- The onboard flash LED (GPIO4) is driven directly — see "What it does"
+  below. That pin also doubles as an SD card data line on this board, so
+  using SD alongside it isn't an option (not that anything here needs SD).
 - Frame rate (~3fps) is a fixed delay between captures, not adaptive to
   actual encode time — fine for a grow-cabinet monitor, not tuned for
   anything faster.
-idf.py flash
-or
- idf.py -p PORT flash
-or
- python -m esptool --chip esp32 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size 4MB --flash_freq 40m 0x1000 build/bootloader/bootloader.bin 0x8000 build/partition_table/partition-table.bin 0x10000 build/growbox_cam.bin
-or from the "/workspaces/microgrowery/esp32cam/build" directory
- python -m esptool --chip esp32 -b 460800 --before default_reset --after hard_reset write_flash "@flash_args"
-root@1da86854c589:/workspaces/microgrowery/esp32cam# 
+- WiFi credentials arrive once, at boot, over a bare UART line with no
+  ack/retry — the hub sends a short burst (3x, 500ms apart) to cover the
+  normal startup race, but if this board resets on its own hours into
+  operation while the hub stays up, it'll sit waiting for credentials
+  that won't come again until the hub itself reboots too.

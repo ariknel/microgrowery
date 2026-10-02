@@ -21,5 +21,15 @@ esp_err_t uart_cam_request_stream_start(void);
 esp_err_t uart_cam_request_stream_stop(void);
 esp_err_t uart_cam_request_snapshot(void);
 
+/* Triggers the camera board's onboard LED for a few seconds — purely to
+ * help locate the physical board, not a photography flash. */
+esp_err_t uart_cam_request_flash(void);
+
+/* Sends {"wifi_ssid":"...","wifi_pass":"..."} to the camera so it can join
+ * the same network — the camera has no WiFi config of its own, it waits
+ * for this over UART before doing anything else. Call once credentials
+ * are known (even if WiFi hasn't finished connecting yet on this side). */
+esp_err_t uart_cam_send_wifi_creds(const char *ssid, const char *pass);
+
 /* On ESP_OK, *buf is heap memory the caller owns and must free(). */
 esp_err_t uart_cam_get_frame(uint8_t **buf, size_t *len, uint32_t timeout_ms);
