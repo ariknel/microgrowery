@@ -109,6 +109,13 @@ The brain of the system — ESP32-S3, FUSB302 PD sink negotiation, AP63203 3.3V 
   <img src="docs/images/pcb_hub_render_back.jpg" alt="Hub board KiCad 3D render back" width="500"/>
 </p>
 
+<p align="center">
+  <img src="docs/images/s3_board_kicadrender.png" alt="Hub board KiCad 3D render, angled view showing USB-C, connectors and the ESP32-S3 module" width="700"/>
+</p>
+<p align="center">
+  <img src="docs/images/esp32_s3_board-1.png" alt="Hub board full schematic — ESP32-S3, FUSB302 PD, USB-C, buck regulators" width="800"/>
+</p>
+
 ### 2. LED Driver Board
 
 One of four identical boards — 4× TX6120 constant-current drivers each, powering 4 strings of 5 LEDs (~21.8W per board, ~87W across all four).
