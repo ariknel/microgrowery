@@ -28,6 +28,22 @@ hardware Serial (pins 0/RX, 1/TX) to the hub's `J14` UART0 debug header:
 {"temps":[23.4,25.1,22.8,24.0],"duty":[90,0,120,255]}
 ```
 
+**Needs a voltage divider — the Nano is 5V logic, the ESP32-S3's GPIOs
+are 3.3V max.** Don't wire Nano TX straight to the hub's RX pin.
+
+```
+Nano TX ---[10k]---+--- hub RX (J14)
+                    |
+                  [15k]
+                    |
+                   GND
+```
+
+`5V × 15k/(10k+15k) = 3.0V` at the junction — safely above the ESP32's
+logic-high threshold (~2.48V) and comfortably under its 3.3V max. The
+divider's output impedance (~6kΩ) is irrelevant against a GPIO's input
+capacitance at 9600 baud, so no signal integrity concern either.
+
 A faulted sensor reports as `null` rather than a made-up number. This is
 **send-only** — the Nano's RX isn't wired to anything, and the hub never
 talks back. Nothing about fan control depends on the hub receiving this;

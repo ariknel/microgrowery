@@ -34,6 +34,12 @@
  * it's free. Unplug this link before re-uploading the sketch over USB, same
  * as unplugging anything else wired to pins 0/1.
  *
+ * Needs a voltage divider on that line — the Nano is 5V logic, the
+ * ESP32-S3's GPIOs are 3.3V max. Nano TX --[10k]-- (node) --[15k]-- GND,
+ * node to hub RX: 5V x 15k/(10k+15k) = 3.0V, safely above the ESP32's
+ * logic-high threshold and under its 3.3V max. See fan_controller/README.md
+ * for the diagram.
+ *
  * No external libraries required — stock Arduino IDE, board "Arduino
  * Nano", upload like any sketch.
  */
