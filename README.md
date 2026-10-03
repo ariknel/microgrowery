@@ -149,15 +149,29 @@ One of four identical boards — 20× XL-3030WWC-1W-3V warm white LEDs each (80 
   <img src="docs/images/led_4.PNG" alt="All 4 LED boards assembled in 2x2 arrangement" width="700"/>
 </p>
 <p align="center">
-  <img src="docs/images/fan_with_shroud_heatsink.PNG" alt="Added heatsinks with 5020 fan attached (4x fans + fan duct, 20x20x80 heatsink 2x per LED pcb)" width="700"/>
+  <img src="docs/images/fans_heatsink.PNG" alt="8x 5015 24dB blower fans, one per heatsink, each on its own short duct — 2 fans per LED board, 4 boards total" width="700"/>
 </p>
 
 At 21.76W per board on an 85×55mm footprint, passive cooling alone isn't
 enough to sustain full brightness — each board got 2× extruded aluminum
-heatsinks and a dedicated ducted 3600rpm blower. Estimated safe continuous
-power: ~4W bare board, ~11W with heatsinks only, full 87W-panel brightness
-(100%) with the fan running. Full thermal model and assumptions:
+heatsinks, each with its own dedicated 5015 blower (24dB) on a short
+individual duct: 8 fans total across the 4 boards, one per heatsink rather
+than one fan shared across both. Estimated safe continuous power: ~4W bare
+board, ~11W with heatsinks only, full 87W-panel brightness (100%) with the
+fans running. Full thermal model and assumptions:
 [BUILD.md#thermal-analysis--led-board-cooling](BUILD.md#thermal-analysis--led-board-cooling).
+
+<p align="center">
+  <img src="docs/images/box_bovenkant-1.png" alt="Top panel technical drawing — 576x426mm, 4 columns of 2 heatsink mounting pads each" width="700"/>
+</p>
+
+The 8 fan cutouts aren't cut into the top panel drawing yet. Proposed
+placement: centered on each of the 8 existing heatsink mounting pads shown
+above (one column per LED board, top and bottom pad = top and bottom
+heatsink), sized to a generic 50×50mm blower footprint — the real 5015's
+exact mounting pattern still needs to be confirmed against its datasheet
+before cutting. Fan control itself is a separate dedicated board — see
+[fan_controller/](fan_controller/).
 
 ### 4. Sensor Board
 
