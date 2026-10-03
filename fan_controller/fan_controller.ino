@@ -26,6 +26,14 @@
  *     can sit the MOSFET in its lossy linear region and overheat it,
  *     which matters more here than losing a few hundred ms of cooling.
  *
+ * Reports to the hub over the same hardware Serial used for USB upload
+ * (Nano pins 0/RX, 1/TX) — wired to the ESP32-S3 hub's J14 UART0 debug
+ * header (hub TX->Nano RX not needed, this is send-only: the hub never
+ * talks back). That header carries nothing else — the hub flashes over
+ * native USB and its console goes out over USB-Serial-JTAG, not UART0, so
+ * it's free. Unplug this link before re-uploading the sketch over USB, same
+ * as unplugging anything else wired to pins 0/1.
+ *
  * No external libraries required — stock Arduino IDE, board "Arduino
  * Nano", upload like any sketch.
  */
@@ -76,6 +84,25 @@ const uint8_t FAN_PWM_PINS[NUM_ZONES] = { 5, 6, 9, 10 };
 #define SERIAL_BAUD        9600
 #define REPORT_INTERVAL_MS 2000
 #define SAMPLE_INTERVAL_MS 500
+
+/* Matches the JSON-line-over-UART convention already used for the hub<->cam
+ * link (see ../firmware/main/uart_cam.c) — one line, newline-terminated.
+ * A faulted sensor reports as JSON null rather than a made-up number. */
+void reportToHub(float temps[NUM_ZONES], uint8_t duties[NUM_ZONES])
+{
+    Serial.print(F("{\"temps\":["));
+    for (uint8_t z = 0; z < NUM_ZONES; z++) {
+        if (isnan(temps[z])) Serial.print(F("null"));
+        else Serial.print(temps[z], 1);
+        if (z < NUM_ZONES - 1) Serial.print(',');
+    }
+    Serial.print(F("],\"duty\":["));
+    for (uint8_t z = 0; z < NUM_ZONES; z++) {
+        Serial.print(duties[z]);
+        if (z < NUM_ZONES - 1) Serial.print(',');
+    }
+    Serial.println(F("]}"));
+}
 
 /* ---------------- state ---------------- */
 
@@ -167,18 +194,6 @@ void loop()
 
     if (now - lastReportMs >= REPORT_INTERVAL_MS) {
         lastReportMs = now;
-        for (uint8_t z = 0; z < NUM_ZONES; z++) {
-            Serial.print(F("board "));
-            Serial.print(z + 1);
-            Serial.print(F(": "));
-            if (isnan(temps[z])) Serial.print(F("fault"));
-            else Serial.print(temps[z], 1);
-            Serial.print(F("C duty="));
-            Serial.print(duties[z]);
-            Serial.print(F("/255 "));
-            Serial.print(zoneFansRunning[z] ? F("ON") : F("OFF"));
-            Serial.print(F("  "));
-        }
-        Serial.println();
+        reportToHub(temps, duties);
     }
 }

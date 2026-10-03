@@ -297,6 +297,22 @@
   .power-breakdown{margin-top:10px;font-size:.78rem;color:var(--text-dim);}
   .power-breakdown div{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed rgba(0,0,0,.08);}
   .power-breakdown div:last-child{border-bottom:none;font-weight:650;color:var(--text);}
+
+  /* ---------- LED cooling (independent fan controller) ---------- */
+  .cooling-offline{
+    display:flex;align-items:center;gap:6px;font-size:.78rem;
+    color:var(--danger);margin-bottom:10px;
+  }
+  .cooling-offline svg{width:14px;height:14px;flex:none;}
+  .cooling-row{
+    display:flex;align-items:center;gap:10px;padding:6px 0;
+    border-bottom:1px dashed rgba(0,0,0,.08);font-size:.85rem;
+  }
+  .cooling-row:last-child{border-bottom:none;}
+  .cooling-name{color:var(--text-dim);flex:1;}
+  .cooling-temp{font-weight:650;width:52px;text-align:right;}
+  .cooling-temp.fault{color:var(--danger);font-weight:650;}
+  .cooling-speed{width:48px;text-align:right;color:var(--text-dim);font-size:.8rem;}
   .power-gauge{
     height:8px;border-radius:5px;background:rgba(0,0,0,.08);
     overflow:hidden;margin-top:14px;
@@ -580,6 +596,35 @@
     </div>
   </div>
 
+  <!-- LED cooling (independent Arduino Nano fan controller, read-only) -->
+  <div class="card">
+    <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>LED Cooling</h2>
+    <div class="cooling-offline" id="coolingOffline" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+      <span>Fan controller offline — no data received yet</span>
+    </div>
+    <div class="cooling-row">
+      <span class="cooling-name">Board 1</span>
+      <span class="cooling-temp" id="coolTemp0">&mdash;</span>
+      <span class="cooling-speed" id="coolSpeed0">&mdash;</span>
+    </div>
+    <div class="cooling-row">
+      <span class="cooling-name">Board 2</span>
+      <span class="cooling-temp" id="coolTemp1">&mdash;</span>
+      <span class="cooling-speed" id="coolSpeed1">&mdash;</span>
+    </div>
+    <div class="cooling-row">
+      <span class="cooling-name">Board 3</span>
+      <span class="cooling-temp" id="coolTemp2">&mdash;</span>
+      <span class="cooling-speed" id="coolSpeed2">&mdash;</span>
+    </div>
+    <div class="cooling-row">
+      <span class="cooling-name">Board 4</span>
+      <span class="cooling-temp" id="coolTemp3">&mdash;</span>
+      <span class="cooling-speed" id="coolSpeed3">&mdash;</span>
+    </div>
+  </div>
+
   <!-- plants -->
   <div class="card span-2">
     <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22V12M12 12C12 7 8 4 3 4c0 5 3 9 9 9zM12 12c0-5 4-8 9-8 0 5-3 9-9 9z"/></svg>Plants</h2>
@@ -690,6 +735,9 @@
    "powerValue","pbLed","pbTotal","powerGauge",
    "rssiText","uptimeText","pdDot","heapText",
    "warnPill","warnText",
+   "coolingOffline",
+   "coolTemp0","coolSpeed0","coolTemp1","coolSpeed1",
+   "coolTemp2","coolSpeed2","coolTemp3","coolSpeed3",
    "cameraFrame","cameraImg","cameraPlaceholder","cameraPlaceholderText",
    "lockTempVal","lockHumVal","lockCameraBtn",
    "lockCameraModal","lockCameraModalClose",
@@ -919,6 +967,25 @@
     }
     if(typeof data.cam_frozen === "boolean"){
       setCamFrozenUI(data.cam_frozen);
+    }
+    if(data.fan_controller){
+      var fc = data.fan_controller;
+      el.coolingOffline.hidden = !!fc.online;
+      for(var i = 0; i < 4; i++){
+        var tEl = el["coolTemp" + i];
+        var sEl = el["coolSpeed" + i];
+        var t = fc.temps ? fc.temps[i] : null;
+        var d = fc.duty ? fc.duty[i] : 0;
+        if(typeof t === "number"){
+          tEl.textContent = t.toFixed(1) + "°C";
+          tEl.classList.remove("fault");
+        } else {
+          tEl.textContent = "fault";
+          tEl.classList.add("fault");
+        }
+        var pct = Math.round((d / 255) * 100);
+        sEl.textContent = pct === 0 ? "off" : pct + "%";
+      }
     }
   }
 

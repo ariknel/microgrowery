@@ -11,6 +11,7 @@ idf_component_register(
         "schedule.c"
         "wifi_manager.c"
         "uart_cam.c"
+        "uart_fan.c"
         "http_server.c"
     INCLUDE_DIRS "."
     REQUIRES

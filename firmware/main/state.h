@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #define FW_VERSION_MAXLEN 16
+#define NUM_FAN_ZONES 4
 
 typedef struct {
     /* sensors (AHT20) */
@@ -35,6 +36,15 @@ typedef struct {
      * live video — toggled from the dashboard, applies to every viewer of
      * the (public) stream, not just the session that set it. */
     bool cam_frozen;
+
+    /* fan controller (independent Arduino Nano, one-way over UART0 — see
+     * ../../fan_controller/). fan_ctrl_online just means "has sent at
+     * least one valid line since boot", not a liveness/staleness check —
+     * there's no timeout watchdog on this. A NAN entry in temp_c means
+     * that zone's NTC is reporting a fault on the Nano side. */
+    bool fan_ctrl_online;
+    float fan_ctrl_temp_c[NUM_FAN_ZONES];
+    uint8_t fan_ctrl_duty[NUM_FAN_ZONES];
 
     /* schedule */
     uint16_t sched_on_min;

@@ -16,7 +16,32 @@ all 8; each board's cooling is independent of the others.
 
 Runs standalone on purpose: fan cooling keeps working even if the hub
 reboots, the camera hangs, or WiFi is down — none of that affects this
-board, which shares no pins or power with either.
+board, which shares no pins or power with either. Cooling doesn't depend
+on the hub hearing from it either — see "Telemetry to the hub" below.
+
+## Telemetry to the hub
+
+Every `REPORT_INTERVAL_MS` (2s), the Nano sends one line over its
+hardware Serial (pins 0/RX, 1/TX) to the hub's `J14` UART0 debug header:
+
+```json
+{"temps":[23.4,25.1,22.8,24.0],"duty":[90,0,120,255]}
+```
+
+A faulted sensor reports as `null` rather than a made-up number. This is
+**send-only** — the Nano's RX isn't wired to anything, and the hub never
+talks back. Nothing about fan control depends on the hub receiving this;
+it's read-only visibility, not a control input. Unplug it before
+re-uploading the sketch over USB, same as unplugging anything else wired
+to pins 0/1.
+
+The hub parses this in `firmware/main/uart_fan.c` and stores it in
+`g_state.fan_ctrl_*`, exposed read-only on `GET /api/status` under
+`fan_controller`, and shown on the dashboard's "LED Cooling" card
+(protected, after login — not on the public lock-screen preview). A
+`null` temp entry shows as "fault" instead of a number; the card shows an
+"offline" notice until the first line has ever arrived (it doesn't go
+back to offline if the Nano later stops sending — no staleness timeout).
 
 ## Fan curve (tune these against a real thermocouple)
 

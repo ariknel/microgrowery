@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "esp_log.h"
 #include "esp_http_server.h"
 #include "esp_timer.h"
@@ -324,6 +325,23 @@ static esp_err_t api_status_get_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(root, "minutes_until_transition", snap.minutes_until_transition);
     cJSON_AddBoolToObject(root, "cam_online", snap.cam_online);
     cJSON_AddBoolToObject(root, "cam_frozen", snap.cam_frozen);
+
+    cJSON *fan_ctrl = cJSON_CreateObject();
+    cJSON_AddBoolToObject(fan_ctrl, "online", snap.fan_ctrl_online);
+    cJSON *fan_temps = cJSON_CreateArray();
+    cJSON *fan_duty = cJSON_CreateArray();
+    for (int i = 0; i < NUM_FAN_ZONES; i++) {
+        if (isnan(snap.fan_ctrl_temp_c[i])) {
+            cJSON_AddItemToArray(fan_temps, cJSON_CreateNull());
+        } else {
+            cJSON_AddItemToArray(fan_temps, cJSON_CreateNumber(snap.fan_ctrl_temp_c[i]));
+        }
+        cJSON_AddItemToArray(fan_duty, cJSON_CreateNumber(snap.fan_ctrl_duty[i]));
+    }
+    cJSON_AddItemToObject(fan_ctrl, "temps", fan_temps);
+    cJSON_AddItemToObject(fan_ctrl, "duty", fan_duty);
+    cJSON_AddItemToObject(root, "fan_controller", fan_ctrl);
+
     cJSON_AddNumberToObject(root, "heap_free", esp_get_free_heap_size());
     cJSON_AddStringToObject(root, "firmware_version", snap.firmware_version);
     return send_json(req, root);

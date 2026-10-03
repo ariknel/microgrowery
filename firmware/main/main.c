@@ -12,6 +12,7 @@
 #include "schedule.h"
 #include "wifi_manager.h"
 #include "uart_cam.h"
+#include "uart_fan.h"
 #include "http_server.h"
 
 static const char *TAG = "main";
@@ -77,6 +78,8 @@ void app_main(void)
     ESP_ERROR_CHECK(schedule_init());
     ESP_ERROR_CHECK(uart_cam_init());
     uart_cam_task_start(4, 1);
+    ESP_ERROR_CHECK(uart_fan_init());
+    uart_fan_task_start(3, 1);
     pd_task_start(I2C_PORT, 5, 0);
     xTaskCreatePinnedToCore(sensor_task, "sensor_task", 2048, NULL, 3, NULL, 0);
 
