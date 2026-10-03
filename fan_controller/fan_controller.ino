@@ -1,5 +1,5 @@
 /* GrowBox LED cooling fan controller — Arduino Nano
- *
+ * Arik Nel
  * Independent thermal safety loop for the 8x 5015 blowers cooling the LED
  * heatsinks (see ../BUILD.md#thermal-analysis--led-board-cooling). Runs on
  * its own Nano specifically so fan control keeps working even if the
