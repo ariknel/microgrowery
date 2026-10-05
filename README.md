@@ -135,6 +135,9 @@ One of four identical boards — 4× TX6120 constant-current drivers each, power
 <p align="center">
   <img src="docs/images/pcb_driver_array.jpg" alt="All 4 driver boards side by side" width="700"/>
 </p>
+<p align="center">
+  <img src="docs/images/driver schematic.png" alt="Driver board per-channel schematic — TX6120, 330uH inductor, SS14 freewheeling diode, 0.75 ohm current sense" width="500"/>
+</p>
 
 ### 3. LED Panel Board
 
@@ -177,8 +180,16 @@ placement: centered on each of the 8 existing heatsink mounting pads shown
 above (one column per LED board, top and bottom pad = top and bottom
 heatsink), sized to a generic 50×50mm blower footprint — the real 5015's
 exact mounting pattern still needs to be confirmed against its datasheet
-before cutting. Fan control itself is a separate dedicated board — see
-[fan_controller/](fan_controller/).
+before cutting.
+
+Fan control itself is a separate dedicated board — an Arduino Nano
+reading 4 NTCs (one per LED board) and switching 4 MOSFETs (one per
+board's 2 fans), independent of the hub and camera. Full schematic,
+wiring and firmware: [fan_controller/](fan_controller/).
+
+<p align="center">
+  <img src="docs/images/fan_controller_handmade.PNG" alt="Fan controller prototype — hand-soldered perfboard, Arduino Nano, 4x MOSFETs, JST fan connectors" width="500"/>
+</p>
 
 ### 4. Sensor Board
 
