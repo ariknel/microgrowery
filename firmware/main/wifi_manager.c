@@ -65,8 +65,18 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
         g_state.wifi_connected = true;
         state_unlock();
 
-        start_mdns();
-        start_sntp_and_tz();
+        /* This event fires on every reconnect, not just the first connect —
+         * mdns_init()/esp_netif_sntp_init() are not safe to call twice.
+         * Re-initializing SNTP while it's already running hits a hard
+         * lwip assert ("Operating mode must not be set while SNTP client
+         * is running") that panics the whole board, which is exactly what
+         * happened on a WiFi disconnect/reconnect during PD bring-up. */
+        static bool s_started_once = false;
+        if (!s_started_once) {
+            start_mdns();
+            start_sntp_and_tz();
+            s_started_once = true;
+        }
         xEventGroupSetBits(s_wifi_events, WIFI_CONNECTED_BIT);
     }
 }

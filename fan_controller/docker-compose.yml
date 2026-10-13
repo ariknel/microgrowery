@@ -1,0 +1,31 @@
+# Build the CH32F4P6 fan controller firmware through a plain
+# arm-none-eabi-gcc container, so nobody needs the ARM toolchain installed
+# locally. This builds the firmware — it does not run it; the output
+# flashes onto and runs on the CH32F4P6 itself via a WCH-LinkE programmer,
+# on the host, not through this container (see README.md).
+#
+# Usage:
+#   docker compose run --rm build   # make
+#   docker compose run --rm clean   # make clean
+#   docker compose run --rm shell   # drop into a shell with the toolchain on PATH
+
+x-build-common: &build-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  working_dir: /project
+  volumes:
+    - .:/project
+
+services:
+  build:
+    <<: *build-common
+    command: make
+
+  clean:
+    <<: *build-common
+    command: make clean
+
+  shell:
+    <<: *build-common
+    entrypoint: bash

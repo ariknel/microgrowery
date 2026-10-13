@@ -41,6 +41,18 @@ esp_err_t fusb302_reset(void)
     return ESP_OK;
 }
 
+/* Resets only the PD protocol logic and flushes both FIFOs; the register
+ * configuration (switches, masks, power) is kept. */
+esp_err_t fusb302_pd_reset(void)
+{
+    return fusb302_write_reg(FUSB302_REG_RESET, RESET_PD_RESET);
+}
+
+bool fusb302_int_asserted(void)
+{
+    return gpio_get_level(FUSB302_INT_GPIO) == 0;
+}
+
 esp_err_t fusb302_read_interrupts(uint8_t *interrupt, uint8_t *interrupt_a, uint8_t *interrupt_b)
 {
     /* Status/Interrupt registers 0x3C-0x42 are contiguous; read them in
@@ -70,7 +82,9 @@ static esp_err_t fusb302_gpio_init(void)
     gpio_config_t cfg = {
         .pin_bit_mask = 1ULL << FUSB302_INT_GPIO,
         .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE, /* pulled up externally per hardware spec */
+        /* INT_N is open-drain. The internal pull-up is harmless alongside
+         * an external one and keeps the line from floating without it. */
+        .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_NEGEDGE,
     };
@@ -93,7 +107,11 @@ esp_err_t fusb302_init(i2c_port_t i2c_port, QueueHandle_t event_queue)
 
     esp_err_t err = fusb302_reset();
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "reset failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "reset failed: %s — check the I2C scan logged at boot: if "
+                       "0x%02X didn't ACK there (hub board has its own 10k pull-ups, "
+                       "so this isn't a missing-pull-up situation), check FUSB302's "
+                       "own solder joints and power rather than the bus in general",
+                 esp_err_to_name(err), FUSB302_I2C_ADDR);
         return err;
     }
 
@@ -109,8 +127,9 @@ esp_err_t fusb302_init(i2c_port_t i2c_port, QueueHandle_t event_queue)
     err = fusb302_write_reg(FUSB302_REG_POWER, POWER_ALL);
     if (err != ESP_OK) return err;
 
-    /* Sink-only: enable pull-downs on both CC lines for detection. */
-    err = fusb302_write_reg(FUSB302_REG_SWITCHES0, SWITCHES0_PDWN1 | SWITCHES0_PDWN2);
+    /* Internal PDWN1/PDWN2 pull-downs intentionally left off — external
+     * 5.1kOhm Rd resistors on CC1/CC2 provide this instead. */
+    err = fusb302_write_reg(FUSB302_REG_SWITCHES0, 0);
     if (err != ESP_OK) return err;
 
     /* Hardware auto-retry on unacked transmissions, 3 retries. */
@@ -118,25 +137,40 @@ esp_err_t fusb302_init(i2c_port_t i2c_port, QueueHandle_t event_queue)
                              CONTROL3_AUTO_RETRY | CONTROL3_N_RETRIES0 | CONTROL3_N_RETRIES1);
     if (err != ESP_OK) return err;
 
-    /* Mask registers: 0 = interrupt enabled, 1 = masked. Unmask what we
-     * actually act on; mask everything else to reduce ISR churn. */
+    /* Mask registers: 0 = interrupt enabled, 1 = masked. */
     err = fusb302_write_reg(FUSB302_REG_MASK, (uint8_t)~(INTERRUPT_I_VBUSOK));
     if (err != ESP_OK) return err;
     err = fusb302_write_reg(FUSB302_REG_MASKA,
-                             (uint8_t)~(INTERRUPTA_I_TOGDONE | INTERRUPTA_I_RETRYFAIL |
-                                        INTERRUPTA_I_TXSENT | INTERRUPTA_I_HARDRST));
+                             (uint8_t)~(INTERRUPTA_I_HARDRST | INTERRUPTA_I_SOFTRST |
+                                        INTERRUPTA_I_TXSENT | INTERRUPTA_I_RETRYFAIL));
     if (err != ESP_OK) return err;
     err = fusb302_write_reg(FUSB302_REG_MASKB, (uint8_t)~(INTERRUPTB_I_GCRCSENT));
     if (err != ESP_OK) return err;
+
+    /* CONTROL0 resets with INT_MASK set (all interrupts gated off); this
+     * write clears it and flushes TX in one go. */
+    err = fusb302_write_reg(FUSB302_REG_CONTROL0, CONTROL0_TX_FLUSH);
+    if (err != ESP_OK) return err;
+    err = fusb302_write_reg(FUSB302_REG_CONTROL1, CONTROL1_RX_FLUSH);
+    if (err != ESP_OK) return err;
+
+    /* Clear anything that latched during setup (VBUSOK fires as soon as the
+     * measure block powers up). The ISR is falling-edge only, so if INT_N
+     * were already low when it's installed, no edge would ever arrive. */
+    uint8_t irq, irq_a, irq_b;
+    fusb302_read_interrupts(&irq, &irq_a, &irq_b);
 
     return fusb302_gpio_init();
 }
 
 static uint8_t read_bc_lvl_on(uint8_t meas_bit)
 {
-    uint8_t sw0 = SWITCHES0_PDWN1 | SWITCHES0_PDWN2 | meas_bit;
-    fusb302_write_reg(FUSB302_REG_SWITCHES0, sw0);
-    vTaskDelay(pdMS_TO_TICKS(1));
+    /* No PDWN1/PDWN2 — the external Rd resistors do that job. */
+    fusb302_write_reg(FUSB302_REG_SWITCHES0, meas_bit);
+    /* 1ms wasn't enough settling time for the measurement comparator after
+     * switching the CC1/CC2 mux — both lines intermittently read as attached
+     * on a connection that was never flipped. */
+    vTaskDelay(pdMS_TO_TICKS(10));
 
     uint8_t status0 = 0;
     fusb302_read_reg(FUSB302_REG_STATUS0, &status0);
@@ -159,14 +193,19 @@ fusb302_cc_t fusb302_detect_cc(void)
         return FUSB302_CC_NONE;
     }
 
-    /* Lock measurement + BMC transmit/receive onto the detected line,
-     * enable AUTO_CRC, sink power role / UFP data role, PD 2.0. */
+    /* Lock measurement + BMC transmit/receive onto the detected line, enable
+     * AUTO_CRC, PD 2.0, sink power role / UFP data role (POWERROLE and
+     * DATAROLE left 0). The hardware builds its GoodCRC headers from these
+     * bits, so they must match the header our own messages carry. */
     uint8_t meas_bit = (chosen == FUSB302_CC1) ? SWITCHES0_MEAS_CC1 : SWITCHES0_MEAS_CC2;
-    fusb302_write_reg(FUSB302_REG_SWITCHES0, SWITCHES0_PDWN1 | SWITCHES0_PDWN2 | meas_bit);
-
     uint8_t txcc_bit = (chosen == FUSB302_CC1) ? SWITCHES1_TXCC1 : SWITCHES1_TXCC2;
+    fusb302_write_reg(FUSB302_REG_SWITCHES0, meas_bit);
     fusb302_write_reg(FUSB302_REG_SWITCHES1, txcc_bit | SWITCHES1_AUTO_CRC | SWITCHES1_SPECREV0);
 
-    ESP_LOGI(TAG, "attached source on CC%d", chosen);
+    /* Start the protocol layer from a clean state: flushes both FIFOs and
+     * resets the hardware's retry/message state. */
+    fusb302_pd_reset();
+
+    ESP_LOGI(TAG, "attached source on CC%d (bc_cc1=%d bc_cc2=%d)", chosen, bc_cc1, bc_cc2);
     return chosen;
 }

@@ -7,9 +7,17 @@ CONFIG_ESPTOOLPY_FLASHSIZE="8MB"
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
-# USB Serial/JTAG console (GPIO19 D-, GPIO20 D+)
-CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
-CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG_ENABLED=y
+# Console on UART0 (default pins GPIO43 TX / GPIO44 RX), reachable via a
+# CP2102-style USB-UART adapter on the J14 debug header, at 115200 baud.
+# Was native USB-Serial-JTAG (GPIO19 D-, GPIO20 D+) — switched after that
+# stopped enumerating on an assembled board (suspected cold joint on the
+# USB-C connector's D+/D-, which are also the JTAG pins). This conflicts
+# with uart_fan.c, which also wants UART0 for CH32F4 fan-controller
+# telemetry — that feature is disabled in main.c while this is active; see
+# the comment there. Switch back to CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+# once JTAG is confirmed working again, which also frees UART0 back up for
+# uart_fan.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
 
 # CPU frequency — headroom for PD signaling timing + MJPEG relay
 CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y

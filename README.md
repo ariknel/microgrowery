@@ -182,14 +182,19 @@ heatsink), sized to a generic 50×50mm blower footprint — the real 5015's
 exact mounting pattern still needs to be confirmed against its datasheet
 before cutting.
 
-Fan control itself is a separate dedicated board — an Arduino Nano
-reading 4 NTCs (one per LED board) and switching 4 MOSFETs (one per
-board's 2 fans), independent of the hub and camera. Full schematic,
-wiring and firmware: [fan_controller/](fan_controller/).
+Fan control itself is a separate dedicated board — a CH32F4P6 (ARM
+Cortex-M4F) on a custom PCB, reading 4 NTCs (one per LED board) and
+switching 4 Si2302 MOSFETs (one per board's 2 fans), independent of the
+hub and camera. Full pinout, wiring and firmware:
+[fan_controller/](fan_controller/).
 
 <p align="center">
   <img src="docs/images/fan_controller_handmade.PNG" alt="Fan controller prototype — hand-soldered perfboard, Arduino Nano, 4x MOSFETs, JST fan connectors" width="500"/>
 </p>
+
+Pictured above is the earlier hand-soldered Nano prototype — same control
+logic, proven on the bench before moving to the CH32F4P6 custom PCB
+described in [fan_controller/](fan_controller/).
 
 ### 4. Sensor Board
 

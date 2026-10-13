@@ -1,9 +1,15 @@
 # GrowBox Fan Controller
 
-Arduino Nano sketch, independent of the ESP32-S3 hub and ESP32-CAM — see
+CH32F4P6 (WCH, ARM Cortex-M4F) firmware on a custom PCB, independent of
+the ESP32-S3 hub and ESP32-CAM — see
 [../BUILD.md#thermal-analysis--led-board-cooling](../BUILD.md#thermal-analysis--led-board-cooling)
 for why the LED heatsinks need active cooling in the first place, and
 [../README.md](../README.md) for the cabinet-level overview.
+
+This replaced an earlier Arduino Nano perfboard prototype (same control
+logic, different hardware) — the prototype photo is still in the main
+README for reference, but the board described here is what's actually
+being built.
 
 ## What it does
 
@@ -15,49 +21,58 @@ board running hotter than the other 3 only speeds up its own 2 fans, not
 all 8; each board's cooling is independent of the others.
 
 Runs standalone on purpose: fan cooling keeps working even if the hub
-reboots, the camera hangs, or WiFi is down — none of that affects this
-board, which shares no pins or power with either. Cooling doesn't depend
-on the hub hearing from it either — see "Telemetry to the hub" below.
+reboots, the camera hangs, or WiFi is down — this board shares no pins or
+power with either (it's powered off the hub's 12V rail through its own
+onboard AMS1117-3.3, not from the hub's logic supply).
 
-## Telemetry to the hub
+**Not implemented in this port yet:** the Nano prototype reported temps
+and fan duty to the hub over UART (see git history / BUILD.md). That
+needed a spare TX pin, and the pinout below doesn't have one allocated —
+rather than guess a pin on an already-laid-out PCB, that feature is just
+left out for now. Cooling doesn't depend on it either way; it was always
+read-only visibility, never a control input.
 
-Every `REPORT_INTERVAL_MS` (2s), the Nano sends one line over its
-hardware Serial (pins 0/RX, 1/TX) to the hub's `J14` UART0 debug header:
+## Hardware
 
-```json
-{"temps":[23.4,25.1,22.8,24.0],"duty":[90,0,120,255]}
+| Component | Part |
+|---|---|
+| MCU | CH32F4P6 (WCH, ARM Cortex-M4F) |
+| Fan switches | 4× Si2302 N-channel MOSFET (SOT-23), one per LED board's pair of fans |
+| NTC | HNTC-104F3950FB, 100kΩ @25°C, B=3950, ±1% ([LCSC C52204613](https://lcsc.com/product-detail/C52204613.html)) |
+| Power | 12V hub rail → onboard AMS1117-3.3 → CH32F4P6 + MOSFET gate drive |
+
+Running the MCU at 3.3V (not the Nano's 5V) is what let the hub-telemetry
+voltage divider from the prototype go away — see "Changes from the Nano
+prototype" below. Si2302 is logic-level enough at 3.3V Vgs for this load
+(a couple hundred mA per MOSFET, 2 small blowers each) — no gate driver
+needed, same as the Nano design's logic-level FQP30N06L.
+
+**Pinout:**
+
+| Net | CH32F4P6 pin | Function |
+|---|---|---|
+| PWM_1 | PD2 (pin 19) | TIM1_CH1 |
+| PWM_2 | PA1 (pin 5) | TIM1_CH2 |
+| PWM_3 | PC3 (pin 13) | TIM1_CH3 |
+| PWM_4 | PC4 (pin 14) | TIM1_CH4 |
+| NTC_1 | PA2 (pin 6) | ADC, channel 0 |
+| NTC_2 | PD3 (pin 20) | ADC, channel 4 |
+| NTC_3 | PD4 (pin 1) | ADC, channel 7 |
+| NTC_4 | PD6 (pin 3) | ADC, channel 6 |
+| SWIO | PD1 (pin 18) | Programming/debug — not touched by application code |
+
+Zone index 0–3 in the firmware = PWM_1/NTC_1 .. PWM_4/NTC_4 = LED board
+1–4. Keep that mapping consistent with however the boards are physically
+labeled in the cabinet.
+
+NTC divider (unchanged from the prototype — see "Changes from the Nano
+prototype"):
+
 ```
-
-**Needs a voltage divider — the Nano is 5V logic, the ESP32-S3's GPIOs
-are 3.3V max.** Don't wire Nano TX straight to the hub's RX pin.
-
+3.3V ---[NTC: 100k]---+---[47k]--- GND
+                       |
+                   ADC input
 ```
-Nano TX ---[10k]---+--- hub RX (J14)
-                    |
-                  [15k]
-                    |
-                   GND
-```
-
-`5V × 15k/(10k+15k) = 3.0V` at the junction — safely above the ESP32's
-logic-high threshold (~2.48V) and comfortably under its 3.3V max. The
-divider's output impedance (~6kΩ) is irrelevant against a GPIO's input
-capacitance at 9600 baud, so no signal integrity concern either.
-
-A faulted sensor reports as `null` rather than a made-up number. This is
-**send-only** — the Nano's RX isn't wired to anything, and the hub never
-talks back. Nothing about fan control depends on the hub receiving this;
-it's read-only visibility, not a control input. Unplug it before
-re-uploading the sketch over USB, same as unplugging anything else wired
-to pins 0/1.
-
-The hub parses this in `firmware/main/uart_fan.c` and stores it in
-`g_state.fan_ctrl_*`, exposed read-only on `GET /api/status` under
-`fan_controller`, and shown on the dashboard's "LED Cooling" card
-(protected, after login — not on the public lock-screen preview). A
-`null` temp entry shows as "fault" instead of a number; the card shows an
-"offline" notice until the first line has ever arrived (it doesn't go
-back to offline if the Nano later stops sending — no staleness timeout).
 
 ## Fan curve (tune these against a real thermocouple)
 
@@ -68,11 +83,10 @@ back to offline if the Nano later stops sending — no staleness timeout).
 | ≥ 55°C | full speed |
 | that zone's sensor open/shorted | that zone fails to full speed; other 3 zones unaffected |
 
-Thresholds are `#define`s at the top of `fan_controller.ino` — the
-35°C/55°C numbers are starting points, not measured values; see the
-thermal analysis in BUILD.md for why (no datasheet thermal-resistance
-data exists for these exact parts, so nothing in that chain is lab
-measured yet).
+Thresholds are `#define`s at the top of `User/main.c` — the 35°C/55°C
+numbers are starting points, not measured values; see the thermal
+analysis in BUILD.md for why (no datasheet thermal-resistance data exists
+for these exact parts, so nothing in that chain is lab measured yet).
 
 ## Noise
 
@@ -85,79 +99,94 @@ the same dashboard brightness setting, they'll usually run close to the
 same temperature and ramp up together in practice, even though each
 zone's speed is computed independently — the "independent zones" design
 is mainly about catching the board that's hotter than the others (worse
-airflow, a bad thermal pad, etc.), not about normal operation being wildly
-uneven. At low brightness all 4 zones stay off or quiet.
+airflow, a bad thermal pad, etc.), not about normal operation being
+wildly uneven. At low brightness all 4 zones stay off or quiet.
 
-## Wiring (×4, one set per zone)
+## Build
 
-<p align="center">
-  <img src="../docs/images/fan_controller-1.png" alt="Fan controller schematic — Arduino Nano, 4x NTC divider + 4x MOSFET switching channel" width="800"/>
-</p>
+Needs WCH's EVT peripheral library, which **isn't vendored in this repo**
+— WCH distributes it as a zip from their own site, not a package
+registry a Dockerfile could pull from automatically. Download the CH32F4
+EVT package from WCH's site and copy into `Libraries/`:
 
 ```
-+5V ---[TH: 100k NTC]---+---[R: 47k]--- GND      (NTC on the LED board's own PCB)
-                        |
-                        Nano Ax
-
-Nano PWM pin ----------- MOSFET gate (direct — FQP30N06L is logic-level, no series resistor)
-                         gate --[10k pulldown to GND]
-MOSFET source -> GND
-MOSFET drain  -> FANn_GND (that board's 2 fans' common return)
-12V ---[220R]--+-- 1N4007 (cathode) -- FANn_GND     (snubber/flyback, clamps the
-               |                                     switching spike back toward
-             [100uF to GND]                          the rail instead of across the MOSFET)
-Fans' + -> 12V rail (same one already on the main hub board)
+fan_controller/Libraries/
+├── CMSIS/              (Core/ + Device/ headers)
+├── Peripheral/
+│   ├── inc/             (ch32f4xx_rcc.h, _gpio.h, _tim.h, _adc.h, etc.)
+│   └── src/
+├── Startup/
+│   └── startup_ch32f40x.S
+└── Link.ld
 ```
 
-| Zone (board) | NTC pin | MOSFET gate pin | Snubber R / D / C | Gate pulldown |
-|---|---|---|---|---|
-| 1 | A0 (NTC_1) | D5 (PWM_1) | R1 220Ω / D1 1N4007 / C1 100µF | R2 10k |
-| 2 | A1 (NTC_2) | D6 (PWM_2) | R3 220Ω / D2 1N4007 / C2 100µF | R4 10k |
-| 3 | A2 (NTC_3) | D9 (PWM_3) | R5 220Ω / D3 1N4007 / C3 100µF | R6 10k |
-| 4 | A3 (NTC_4) | D10 (PWM_4) | R7 220Ω / D4 1N4007 / C4 100µF | R8 10k |
+Paths above match WCH's typical EVT layout as of this writing — if your
+download extracts differently, adjust the path variables at the top of
+`Makefile` rather than moving files around to match.
 
-NTC divider resistors: R9 (zone 1), R10 (zone 2), R11 (zone 3), R12
-(zone 4), all 47kΩ. MOSFETs: Q1–Q4, FQP30N06L (TO-220, logic-level gate —
-safe to drive straight from the Nano's 5V PWM output, which is why there's
-no gate series resistor in this design).
+```bash
+docker compose run --rm build   # make
+docker compose run --rm clean   # make clean
+docker compose run --rm shell   # drop into a shell with the toolchain on PATH
+```
 
-Keep this board-to-pin mapping consistent with how the boards are
-physically labeled in the cabinet — otherwise "board 3 running hot" on
-the serial log points at the wrong board.
+This builds `build/fan_controller.elf/.hex/.bin`. Flashing itself isn't
+containerized — use WCH-LinkE's own host-side tools (WCH-LinkUtility or
+`MRS_Programmer`/`wlink`, depending on what WCH currently ships) pointed
+at the `.hex`, connected via the `SWIO` pin above.
 
-The gate pull-down on each MOSFET matters: without it, that gate floats
-during Nano power-on/reset (before `setup()` runs) and can sit in a lossy
-partially-on state that heats up the MOSFET itself — not just a lost few
-hundred ms of cooling. The 220Ω/1N4007/100µF network per channel clamps
-the inductive switching spike from the fan motor back toward the 12V rail
-(through the resistor, which limits clamp current) instead of letting it
-ring across the MOSFET's drain-source junction, and the 100µF cap locally
-decouples that channel's share of the 12V rail.
+**Honesty note on the firmware itself:** `User/main.c` was written
+without WCH's actual EVT header files in hand — it targets WCH's
+Standard-Peripheral-Library-style API (CH32F4 is marketed as
+register/pin-compatible with STM32F405, and WCH's library mirrors STM32
+SPL conventions), but exact function/macro names (especially the GPIO
+alternate-function config for routing PD2/PA1/PC3/PC4 to TIM1, and the
+`ADC_Channel_*` constants) need a real compile check against your
+vendored `Libraries/` before trusting them. Flagged inline in the source
+wherever a call is a best-effort match rather than verified API.
 
-NTC part: HNTC-104F3950FB, 100kΩ @25°C, B=3950, ±1% ([LCSC C52204613](https://lcsc.com/product-detail/C52204613.html)),
-paired with a 47kΩ series resistor — update `SERIES_RESISTOR_OHMS` in the
-sketch if the real build ends up using a different series value. If you
-ever swap to a different NTC part, double-check its Beta rating before
-reusing these defaults; a wrong Beta/R25 shifts the whole curve without
-giving any obvious sign that it's wrong.
+## Changes from the Nano prototype
 
-## Flashing
-
-Stock Arduino IDE, board "Arduino Nano", no external libraries. Open
-`fan_controller.ino` and upload — same as any Nano sketch.
+- **MCU:** Arduino Nano (ATmega328P, 5V logic) → CH32F4P6 (ARM
+  Cortex-M4F, 3.3V logic, powered via onboard AMS1117-3.3 off the 12V
+  rail instead of USB).
+- **MOSFETs:** FQP30N06L (TO-220, through-hole) → Si2302 (SOT-23, custom
+  PCB) — same logic-level direct-GPIO-drive approach, much smaller
+  package for a load this light.
+- **NTC divider:** unchanged — still 100k NTC / 47k series. The divider
+  is ratiometric (supply and ADC reference are the same rail), so the
+  5V→3.3V change didn't require a different resistor. What *did* change
+  is ADC resolution: the code now reads 12-bit (0–4095) instead of the
+  Nano's 10-bit (0–1023).
+- **Hub telemetry:** dropped in this port (see "What it does" above) —
+  the prototype's voltage-divider UART link to the hub's `J14` header no
+  longer applies since there's no TX pin allocated on this board yet.
+- **Toolchain:** Arduino IDE / `.ino` → plain C + `arm-none-eabi-gcc`,
+  built through Docker like `../firmware` and `../esp32cam` (see "Build"
+  above) — no vendor IDE needed, though WCH's EVT library still has to be
+  supplied manually since it isn't on a public package registry the way
+  `idf_component.yml` pulls ESP-IDF components.
 
 ## Known gaps
 
+- `User/main.c`'s peripheral-library calls are unverified against real
+  WCH headers — see the honesty note under "Build".
 - Thresholds are unverified placeholders — needs real thermocouple
   validation on each board, same caveat as the rest of the thermal
   analysis this design is based on.
 - No tachometer feedback (fans' 3rd wire, if present, isn't read) — the
   controller can't detect a stalled or disconnected fan on a given zone,
   only react to that zone's temperature.
+- No hub telemetry in this port (see "What it does").
+- `HardFault`/`BusFault`/etc. handlers (`User/ch32f4xx_it.c`) just halt
+  rather than forcing fans to a safe state first — a watchdog-driven
+  fail-safe would be more thorough but needs care to get right from fault
+  context; not attempted here.
 - An NTC mounted on the PCB (rather than on the heatsink itself) reads
   board temperature, which tracks junction temperature more directly but
   lags heatsink temperature slightly — fine for this fan curve's purpose,
   worth knowing if you ever compare readings against the heatsink-surface
   numbers in the BUILD.md thermal analysis.
 
-Schematic source: [docs/Schematics/fan_controller.pdf](../docs/Schematics/fan_controller.pdf).
+Nano prototype schematic (superseded, kept for reference):
+[docs/Schematics/fan_controller.pdf](../docs/Schematics/fan_controller.pdf).

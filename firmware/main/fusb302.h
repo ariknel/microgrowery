@@ -2,11 +2,8 @@
 
 /* FUSB302B register-level driver.
  *
- * Register addresses below are the authoritative FUSB302B map (datasheet
- * Rev. as sold by onsemi/Fairchild). Bit-field defines are transcribed to
- * the best of available reference material; verify against your exact
- * FUSB302 datasheet revision before relying on them on real hardware —
- * USB PD signaling is unforgiving of an incorrectly-set bit.
+ * Register addresses and bit fields checked against the onsemi FUSB302B
+ * datasheet and the Linux kernel's drivers/usb/typec/tcpm/fusb302_reg.h.
  */
 
 #include <stdint.h>
@@ -102,19 +99,30 @@
 
 /* ---- Status0 bits ---- */
 #define STATUS0_BC_LVL_MASK  0x03
-#define STATUS0_WAKE_ALL     (1 << 2)
-#define STATUS0_ACTIVITY     (1 << 3)
-#define STATUS0_COMP         (1 << 4)
-#define STATUS0_CRC_CHK      (1 << 5)
-#define STATUS0_ALERT        (1 << 6)
+#define STATUS0_WAKE         (1 << 2)
+#define STATUS0_ALERT        (1 << 3)
+#define STATUS0_CRC_CHK      (1 << 4)
+#define STATUS0_COMP         (1 << 5)
+#define STATUS0_ACTIVITY     (1 << 6)
 #define STATUS0_VBUSOK       (1 << 7)
+
+/* ---- Status1 bits ---- */
+#define STATUS1_OCP          (1 << 0)
+#define STATUS1_OVRTEMP      (1 << 1)
+#define STATUS1_TX_FULL      (1 << 2)
+#define STATUS1_TX_EMPTY     (1 << 3)
+#define STATUS1_RX_FULL      (1 << 4)
+#define STATUS1_RX_EMPTY     (1 << 5)
 
 /* ---- InterruptA bits ---- */
 #define INTERRUPTA_I_HARDRST   (1 << 0)
-#define INTERRUPTA_I_TXSENT    (1 << 1)
-#define INTERRUPTA_I_SOFTFAIL  (1 << 4)
-#define INTERRUPTA_I_RETRYFAIL (1 << 5)
+#define INTERRUPTA_I_SOFTRST   (1 << 1)
+#define INTERRUPTA_I_TXSENT    (1 << 2)
+#define INTERRUPTA_I_HARDSENT  (1 << 3)
+#define INTERRUPTA_I_RETRYFAIL (1 << 4)
+#define INTERRUPTA_I_SOFTFAIL  (1 << 5)
 #define INTERRUPTA_I_TOGDONE   (1 << 6)
+#define INTERRUPTA_I_OCP_TEMP  (1 << 7)
 
 /* ---- InterruptB bits ---- */
 #define INTERRUPTB_I_GCRCSENT  (1 << 0)
@@ -124,16 +132,19 @@
 #define INTERRUPT_I_COLLISION  (1 << 1)
 #define INTERRUPT_I_VBUSOK     (1 << 7)
 
-/* ---- FIFO tokens ---- */
+/* ---- TX FIFO tokens ---- */
 #define TKN_TXON     0xA1
-#define TKN_SOP1     0x12
-#define TKN_SOP2     0x12
-#define TKN_SOP3     0x12
-#define TKN_SOP_END  0x13
+#define TKN_SYNC1    0x12
+#define TKN_SYNC2    0x13
+#define TKN_SYNC3    0x1B
 #define TKN_PACKSYM  0x80  /* OR with byte count (0-31) */
 #define TKN_JAMCRC   0xFF
 #define TKN_EOP      0x14
 #define TKN_TXOFF    0xFE
+
+/* ---- RX FIFO tokens (top 3 bits of the first byte of each packet) ---- */
+#define RX_TKN_MASK  0xE0
+#define RX_TKN_SOP   0xE0
 
 typedef enum {
     FUSB302_CC_NONE = 0,
@@ -147,13 +158,18 @@ typedef struct {
 
 esp_err_t fusb302_init(i2c_port_t i2c_port, QueueHandle_t event_queue);
 esp_err_t fusb302_reset(void);
+esp_err_t fusb302_pd_reset(void);
 esp_err_t fusb302_read_reg(uint8_t reg, uint8_t *val);
 esp_err_t fusb302_write_reg(uint8_t reg, uint8_t val);
 esp_err_t fusb302_read_block(uint8_t reg, uint8_t *buf, size_t len);
 esp_err_t fusb302_write_block(const uint8_t *buf, size_t len);
 
-/* Detects which CC line the source is attached on and locks measurement +
- * transmit routing onto it. Returns FUSB302_CC_NONE if nothing attached. */
+/* INT_N is active-low and stays low until the interrupt registers are read. */
+bool fusb302_int_asserted(void);
+
+/* Detects which CC line the source is attached on, locks measurement +
+ * transmit routing onto it and resets the PD protocol logic. Returns
+ * FUSB302_CC_NONE if nothing is attached. */
 fusb302_cc_t fusb302_detect_cc(void);
 
 esp_err_t fusb302_read_interrupts(uint8_t *interrupt, uint8_t *interrupt_a, uint8_t *interrupt_b);

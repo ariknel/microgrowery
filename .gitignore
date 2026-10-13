@@ -11,6 +11,12 @@ esp32cam/managed_components/
 esp32cam/sdkconfig
 esp32cam/sdkconfig.old
 
+# CH32F4P6 fan controller — build output, and the vendored WCH EVT
+# library (downloaded separately per fan_controller/README.md, not
+# something to commit).
+fan_controller/build/
+fan_controller/Libraries/
+
 # Editor / OS junk
 *.log
 .DS_Store

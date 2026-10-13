@@ -55,6 +55,7 @@ All four boards designed in KiCad, manufactured at JLCPCB.
 | 3.3V regulator | AP63203 | 32V input, 2A buck |
 | USB-C receptacle | 16-pin SMD | Power + CC1/CC2 for FUSB302 + D+/D- for JTAG |
 | Crystal | 40MHz ±10ppm | Required for bare SoC |
+| I2C pull-ups | 2× 10kΩ | SDA/SCL (GPIO8/9) — services both FUSB302 and the external sensor-board I2C bus |
 
 **Connectors:**
 
@@ -171,8 +172,11 @@ away from heat sources for accurate ambient readings.
 
 **Board dimensions:** 25 × 20mm, FR4 1.6mm
 
-Pull-ups live on the sensor board rather than the hub so it's self-contained
-and plug-and-play on any I2C bus.
+Originally meant to be the only I2C pull-ups on the bus, for a
+self-contained/plug-and-play sensor board — the hub board now also has
+its own 10kΩ pull-ups, so this board's 4.7kΩ ones just end up in
+parallel with those (~3.2kΩ combined) when both are present, which is
+still a fine value, not a problem.
 
 ---
 
@@ -354,6 +358,21 @@ scripts/monitor.sh /dev/ttyUSB0
 USB-C connector — no external programmer or probe needed, for flashing or
 for OpenOCD debugging (`openocd -f board/esp32s3-builtin.cfg`).
 
+**If native USB-JTAG doesn't enumerate on an assembled board** (console
+silent, no device shows up on the host at all) despite the chip itself
+checking out fine over UART0 — flashing still works regardless, since
+that goes over the same native USB; it's specifically the *console* that
+needs a fallback. Most likely cause: a cold joint or bridged pin on the
+USB-C connector's D+/D- (GPIO19/20), since that's the one thing a basic
+UART0 chip/flash health check doesn't touch at all. Workaround: wire a
+CP2102-style USB-UART adapter to `J14` (UART0 TXD/RXD) and set
+`CONFIG_ESP_CONSOLE_UART_DEFAULT=y` in `sdkconfig.defaults` instead of
+`CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y` — 115200 baud, default UART0 pins.
+This conflicts with `uart_fan.c` (CH32F4 fan-controller telemetry, also
+UART0) — see the comment in `main.c` where it's disabled for exactly this
+reason; only one of {debug console, fan telemetry} can own UART0 at a
+time as currently wired.
+
 ### First boot / WiFi setup
 
 With no WiFi credentials stored, the device starts a SoftAP:
@@ -366,6 +385,16 @@ URL:      http://192.168.4.1
 
 Connect, open the URL, enter your WiFi credentials. Device restarts,
 connects, and the dashboard becomes reachable at `http://growbox.local`.
+
+**Known gap:** no captive-portal auto-popup yet — phones/laptops don't
+automatically open the login page the way a typical router setup flow
+does; you have to navigate to `192.168.4.1` manually. Would need a DNS
+server on the AP that resolves every query to the board's own IP, plus
+answering the OS-specific captive-portal probe URLs (Apple's
+`captive.apple.com/hotspot-detect.html`, Android's
+`connectivitycheck.gstatic.com/generate_204`, Windows'
+`msftconnecttest.com/connecttest.txt`) in a way that triggers the
+auto-popup instead of matching the "already online" response.
 
 ---
 
