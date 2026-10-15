@@ -6,7 +6,10 @@
 #include "freertos/queue.h"
 
 #define PD_REQUEST_VOLTAGE_MV     20000
-#define PD_REQUEST_MAX_CURRENT_MA 3250
+/* Ask for whatever the PDO offers, up to 5A: LEDs (65W) plus the rest of the
+ * board need more than 3A at 20V, and drawing past the requested current
+ * gets VBUS cut. LED output is capped to the contract in led_control. */
+#define PD_REQUEST_MAX_CURRENT_MA 5000
 
 /* Wait this long after attach for an unsolicited Source_Capabilities before
  * asking with Get_Source_Cap (spec tTypeCSinkWaitCap is 310-620ms). */

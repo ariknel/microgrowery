@@ -4,6 +4,7 @@
 #include "freertos/task.h"
 #include "fusb302.h"
 #include "fusb302_pd.h"
+#include "led_control.h"
 #include "state.h"
 
 static const char *TAG = "fusb302_pd";
@@ -172,16 +173,20 @@ static void apply_negotiated(uint32_t voltage_mv, uint32_t current_ma)
     g_state.pd_voltage_mv = voltage_mv;
     g_state.pd_current_ma = current_ma;
     state_unlock();
+    /* LEDs and fans only run on a 20V contract (see led_control.c). */
+    led_set_power_budget(voltage_mv == PD_REQUEST_VOLTAGE_MV ? voltage_mv * current_ma / 1000 : 0);
     ESP_LOGI(TAG, "PD negotiated: %lu mV @ %lu mA", (unsigned long)voltage_mv, (unsigned long)current_ma);
 }
 
 static void clear_negotiated(void)
 {
     state_lock();
+    bool was_negotiated = g_state.pd_negotiated;
     g_state.pd_negotiated = false;
     g_state.pd_voltage_mv = 0;
     g_state.pd_current_ma = 0;
     state_unlock();
+    if (was_negotiated) led_set_power_budget(0);
 }
 
 static void enter_wait_caps(TickType_t now, uint32_t get_cap_delay_ms)
@@ -214,6 +219,9 @@ static void handle_source_caps(const uint32_t *objects, uint8_t ndo, TickType_t 
         s_request_sent_tick = now;
         s_req_voltage_mv = mv;
         s_req_current_ma = ma;
+        /* Renegotiating over an existing contract: shed load while VBUS
+         * transitions (the spec's pSnkStdby), restored on PS_RDY. */
+        clear_negotiated();
     }
 
     for (uint8_t o = 0; o < ndo; o++) {

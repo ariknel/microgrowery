@@ -1,9 +1,12 @@
+#include <stdlib.h>
 #include <time.h>
+#include <sys/time.h>
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "schedule.h"
 #include "nvs_config.h"
 #include "led_control.h"
+#include "wifi_manager.h"
 #include "state.h"
 
 static const char *TAG = "schedule";
@@ -11,15 +14,42 @@ static const char *TAG = "schedule";
 #define RAMP_MINUTES 5
 #define TICK_INTERVAL_MS 60000
 
-typedef enum {
-    RAMP_PHASE_OFF = 0,
-    RAMP_PHASE_RISING,
-    RAMP_PHASE_ON,
-    RAMP_PHASE_FALLING,
-} ramp_phase_t;
+/* Anything earlier is the unset 1970 clock, not real time. */
+#define CLOCK_VALID_EPOCH 1600000000
+#define CLOCK_SAVE_EVERY_TICKS 10
 
 static esp_timer_handle_t s_timer;
-static ramp_phase_t s_phase = RAMP_PHASE_OFF;
+/* Starts one short so the first tick with a valid clock saves it right away. */
+static int s_ticks_since_clock_save = CLOCK_SAVE_EVERY_TICKS - 1;
+
+/* There's no RTC battery, so a power cut (which a PD Hard Reset is on this
+ * board) loses the time; a soft reset keeps it. If WiFi can't sync after a
+ * power cut, resume from the last saved time instead of 1970: the schedule
+ * keeps running on the built-in clock, behind by however long the power was
+ * off, and SNTP corrects it at the next sync. */
+static void restore_clock(void)
+{
+    if (time(NULL) >= CLOCK_VALID_EPOCH) return;
+
+    uint32_t saved = 0;
+    nvs_config_get_u32("clock_ts", &saved, 0);
+    if (saved < CLOCK_VALID_EPOCH) {
+        ESP_LOGW(TAG, "no saved time yet, schedule waits for the first time sync");
+        return;
+    }
+    struct timeval tv = { .tv_sec = saved, .tv_usec = 0 };
+    settimeofday(&tv, NULL);
+    ESP_LOGW(TAG, "clock not synced yet, resuming from last saved time");
+}
+
+static void save_clock(void)
+{
+    time_t now = time(NULL);
+    if (now < CLOCK_VALID_EPOCH) return;
+    if (++s_ticks_since_clock_save < CLOCK_SAVE_EVERY_TICKS) return;
+    s_ticks_since_clock_save = 0;
+    nvs_config_set_u32("clock_ts", (uint32_t)now);
+}
 
 static uint16_t minutes_since_midnight(void)
 {
@@ -82,6 +112,7 @@ uint32_t schedule_grow_day(void)
 static void schedule_tick(void *arg)
 {
     (void)arg;
+    save_clock();
     maybe_seed_first_boot();
 
     uint16_t on_min, off_min;
@@ -99,7 +130,18 @@ static void schedule_tick(void *arg)
         g_state.lights_on = true;
         g_state.minutes_until_transition = 0;
         state_unlock();
-        s_phase = RAMP_PHASE_OFF; /* re-armed so re-enabling starts clean */
+        led_set_output(target);
+        return;
+    }
+
+    if (time(NULL) < CLOCK_VALID_EPOCH) {
+        /* Never synced and nothing saved: only possible before the very
+         * first time sync, which follows WiFi provisioning within seconds. */
+        state_lock();
+        g_state.lights_on = false;
+        g_state.minutes_until_transition = 0;
+        state_unlock();
+        led_set_output(0);
         return;
     }
 
@@ -115,26 +157,25 @@ static void schedule_tick(void *arg)
         until = (uint16_t)minutes_since(now_min, on_min);
     }
 
+    /* Ramp steps go to the output only, never to the setpoint: writing them
+     * back as the brightness made each step compound on the last, and the
+     * sunset ramp ended by storing 0 so the lights never came back on.
+     * Re-applied every tick, so the output always matches the schedule. */
+    uint8_t output;
     if (lights_on && since_on < RAMP_MINUTES) {
-        uint8_t step = (uint8_t)(((since_on + 1) * (uint32_t)target) / RAMP_MINUTES);
-        led_set_brightness(step);
-        s_phase = RAMP_PHASE_RISING;
+        output = (uint8_t)(((since_on + 1) * (uint32_t)target) / RAMP_MINUTES);
     } else if (!lights_on && since_off < RAMP_MINUTES) {
-        uint8_t step = (uint8_t)(target - (((since_off + 1) * (uint32_t)target) / RAMP_MINUTES));
-        led_set_brightness(step);
-        s_phase = RAMP_PHASE_FALLING;
-    } else if (lights_on && s_phase != RAMP_PHASE_ON) {
-        led_set_brightness(target);
-        s_phase = RAMP_PHASE_ON;
-    } else if (!lights_on && s_phase != RAMP_PHASE_OFF) {
-        led_set_brightness(0);
-        s_phase = RAMP_PHASE_OFF;
+        output = (uint8_t)(target - (((since_off + 1) * (uint32_t)target) / RAMP_MINUTES));
+    } else {
+        output = lights_on ? target : 0;
     }
 
     state_lock();
     g_state.lights_on = lights_on;
     g_state.minutes_until_transition = until;
     state_unlock();
+
+    led_set_output(output);
 }
 
 esp_err_t schedule_init(void)
@@ -150,6 +191,12 @@ esp_err_t schedule_init(void)
     g_state.sched_off_min = off_min;
     g_state.sched_enabled = enabled != 0;
     state_unlock();
+
+    /* Timezone at boot, not only once WiFi connects, so a restored clock is
+     * read as local time too. */
+    setenv("TZ", WIFI_TZ_STRING, 1);
+    tzset();
+    restore_clock();
 
     maybe_seed_first_boot();
 

@@ -12,19 +12,16 @@
 
 static const char *TAG = "uart_cam";
 
-typedef struct {
-    uint8_t *buf;
-    size_t len;
-} cam_frame_t;
-
-static QueueHandle_t s_frame_queue;
-
-/* Last successfully received frame, kept around independently of the
- * (single-consumer) frame queue so a frozen view has something to serve
- * even while no one's actively pulling from the queue. */
+/* Latest received frame. Viewers copy it out and use s_frame_seq to tell a
+ * new frame from one they've already sent, so any number of viewers each
+ * see every frame (a single-consumer queue split frames between them). */
 static SemaphoreHandle_t s_cache_mutex;
 static uint8_t *s_cached_frame = NULL;
 static size_t s_cached_frame_len = 0;
+static uint32_t s_frame_seq = 0;
+
+static SemaphoreHandle_t s_live_mutex;
+static int s_live_viewers = 0;
 
 esp_err_t uart_cam_init(void)
 {
@@ -47,8 +44,8 @@ esp_err_t uart_cam_init(void)
                         UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     if (err != ESP_OK) return err;
 
-    s_frame_queue = xQueueCreate(UART_CAM_FRAME_QUEUE_DEPTH, sizeof(cam_frame_t));
     s_cache_mutex = xSemaphoreCreateMutex();
+    s_live_mutex = xSemaphoreCreateMutex();
     return ESP_OK;
 }
 
@@ -58,8 +55,20 @@ static esp_err_t send_cmd(const char *json_line)
     return written >= 0 ? ESP_OK : ESP_FAIL;
 }
 
-esp_err_t uart_cam_request_stream_start(void) { return send_cmd("{\"cmd\":\"stream\",\"state\":1}\n"); }
-esp_err_t uart_cam_request_stream_stop(void)  { return send_cmd("{\"cmd\":\"stream\",\"state\":0}\n"); }
+void uart_cam_live_acquire(void)
+{
+    xSemaphoreTake(s_live_mutex, portMAX_DELAY);
+    if (s_live_viewers++ == 0) send_cmd("{\"cmd\":\"stream\",\"state\":1}\n");
+    xSemaphoreGive(s_live_mutex);
+}
+
+void uart_cam_live_release(void)
+{
+    xSemaphoreTake(s_live_mutex, portMAX_DELAY);
+    if (s_live_viewers > 0 && --s_live_viewers == 0) send_cmd("{\"cmd\":\"stream\",\"state\":0}\n");
+    xSemaphoreGive(s_live_mutex);
+}
+
 esp_err_t uart_cam_request_snapshot(void)     { return send_cmd("{\"cmd\":\"snapshot\"}\n"); }
 esp_err_t uart_cam_request_flash(void)        { return send_cmd("{\"cmd\":\"flash\"}\n"); }
 
@@ -147,24 +156,14 @@ static bool try_read_frame(void)
         return true;
     }
 
-    uint8_t *cache_copy = malloc(frame_len);
-    if (cache_copy) {
-        memcpy(cache_copy, frame_buf, frame_len);
-        if (xSemaphoreTake(s_cache_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-            free(s_cached_frame);
-            s_cached_frame = cache_copy;
-            s_cached_frame_len = frame_len;
-            xSemaphoreGive(s_cache_mutex);
-        } else {
-            free(cache_copy);
-        }
-    }
-
-    cam_frame_t item = { .buf = frame_buf, .len = frame_len };
-    if (xQueueSend(s_frame_queue, &item, 0) != pdTRUE) {
-        cam_frame_t old;
-        if (xQueueReceive(s_frame_queue, &old, 0) == pdTRUE) free(old.buf);
-        xQueueSend(s_frame_queue, &item, 0);
+    if (xSemaphoreTake(s_cache_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        free(s_cached_frame);
+        s_cached_frame = frame_buf;
+        s_cached_frame_len = frame_len;
+        s_frame_seq++;
+        xSemaphoreGive(s_cache_mutex);
+    } else {
+        free(frame_buf);
     }
 
     state_lock();
@@ -204,15 +203,30 @@ void uart_cam_task_start(UBaseType_t priority, BaseType_t core_id)
     xTaskCreatePinnedToCore(uart_cam_task, "uart_cam_task", 4096, NULL, priority, NULL, core_id);
 }
 
-esp_err_t uart_cam_get_frame(uint8_t **buf, size_t *len, uint32_t timeout_ms)
+esp_err_t uart_cam_get_frame_after(uint32_t *seq, uint8_t **buf, size_t *len, uint32_t timeout_ms)
 {
-    cam_frame_t item;
-    if (xQueueReceive(s_frame_queue, &item, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
-        return ESP_ERR_TIMEOUT;
+    TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+    for (;;) {
+        if (xSemaphoreTake(s_cache_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            esp_err_t result = ESP_ERR_NOT_FOUND;
+            if (s_cached_frame && s_frame_seq != *seq) {
+                uint8_t *copy = malloc(s_cached_frame_len);
+                if (copy) {
+                    memcpy(copy, s_cached_frame, s_cached_frame_len);
+                    *buf = copy;
+                    *len = s_cached_frame_len;
+                    *seq = s_frame_seq;
+                    result = ESP_OK;
+                } else {
+                    result = ESP_ERR_NO_MEM;
+                }
+            }
+            xSemaphoreGive(s_cache_mutex);
+            if (result != ESP_ERR_NOT_FOUND) return result;
+        }
+        if ((int32_t)(deadline - xTaskGetTickCount()) <= 0) return ESP_ERR_TIMEOUT;
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
-    *buf = item.buf;
-    *len = item.len;
-    return ESP_OK;
 }
 
 esp_err_t uart_cam_get_cached_frame(uint8_t **buf, size_t *len)

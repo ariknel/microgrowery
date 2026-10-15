@@ -1,8 +1,14 @@
 # PD negotiation — code review findings and status (2026-10-13)
 
-Built, **not yet flashed**. Requires the external 5.1kΩ Rd resistors on CC1/CC2
-to be fitted first: the firmware no longer enables the FUSB302's internal
-pull-downs, so without the resistors nothing will attach.
+**Confirmed working on hardware (2026-10-13)** with the Phreeze 100W charger
+and external 5.1kΩ Rd resistors on CC1/CC2: the charger sent
+Source_Capabilities unprompted at ~700ms after boot, PDO 5 (20V @ 5A) was
+requested, and the 20V/5A contract was in place at ~970ms. The LED cap went
+to 100%. The firmware no longer enables the FUSB302's internal pull-downs, so
+the external resistors are required.
+
+Not yet re-tested on this build: the laptop OTG port, and Freeze in two
+windows with a camera connected.
 
 Goal: negotiate 20V with any USB-C PD source. Tested so far against a laptop
 OTG port (offers 5V only) and a Phreeze 100W GaN charger (5/9/12/15/20V fixed +
@@ -64,6 +70,60 @@ kernel's `fusb302` driver and the USB PD spec. The header layout in
     20V with the Capability Mismatch bit set, instead of staying silent.
     Note: on a source without 20V the LED rail will run at that lower voltage
     (5V on the laptop OTG port).
+
+## Whole-firmware review: other persisting faults fixed (2026-10-13)
+
+1. **Loads ran before there was a contract.** The LED boards and the fans'
+   12V buck both run straight off VBUS. The LEDs (at the stored 70%) and fans
+   were switched on at boot, while VBUS was still 5V and the source may only
+   allow 0.5-1.5A. They also stayed loaded through the 5V→20V transition, and
+   after 20V the LEDs (65W) plus fans could exceed a 3A/60W contract. Any of
+   these can make the source cut VBUS. Now (`led_control.c`):
+   - LEDs and both fans stay at 0 until a **20V** contract exists.
+   - LED duty is capped to `(contract W − 10W for the rest of the board) / 65W`:
+     about 76% on 20V@3A, 100% on 20V@5A.
+   - Load is shed while renegotiating and on Hard Reset or VBUS loss.
+   - The firmware now requests the PDO's full current (up to 5A) instead of a
+     fixed 3.25A.
+2. **The schedule destroyed the brightness setpoint.** Each sunrise/sunset
+   ramp step was written back as *the* brightness and saved to flash. Steps
+   compounded down to almost nothing, and after the first sunset the stored
+   brightness was 0, so the lights never came back on. Ramps now drive only
+   the output, never the setpoint. The output is re-applied every minute, so
+   changing brightness at night no longer leaves the lights on until morning.
+3. **Freeze in two windows hung the whole web server** until power-cycle.
+   esp_http_server handles all requests on one task. `/stream` never returned
+   while open, and when frozen with no cached frame (camera not sending) it
+   waited forever without sending anything, so a closed tab was never
+   noticed. Every later request, including unfreeze, queued behind it. Now:
+   - Each stream runs in its own task (`httpd_req_async_handler_begin`), so
+     the API stays responsive while streaming.
+   - A frozen stream with nothing cached ends instead of idling.
+   - Streams are capped at 3.
+   - Viewers share a latest-frame cache with a sequence number. Before, a
+     single-consumer queue split frames between viewers, and one viewer
+     leaving stopped the camera for everyone. The camera is now
+     reference-counted and streams while anyone watches live.
+
+4. **Schedule clock** (decided: follow real time; if WiFi fails, keep going on
+   the built-in clock). There's no RTC battery, so a power cut, which a PD
+   Hard Reset is on this board, wipes the time. Before this fix, a reboot
+   without WiFi ran the schedule on a 1970 clock starting at midnight UTC.
+   Now (`schedule.c`):
+   - The current time is saved to NVS every 10 minutes and restored at boot
+     if there's no sync yet. The schedule then runs behind by only the
+     power-off duration, and the next sync corrects it.
+   - The timezone is set at boot, not only once WiFi connects.
+   - If there's no valid time at all (first boot, before the first sync),
+     lights stay off rather than follow a fake clock.
+
+### Open items (not changed)
+
+- **LED DIM pin during reset.** GPIO11 floats until `led_control_init` runs.
+  If the TX6120 boards pull DIM high, the panels run at full brightness for
+  that moment (only matters if VBUS is already at 20V, e.g. after a
+  watchdog reset). It's a hardware fix: a pull-down on DIM.
+- **Default dashboard code is `4712`** unless changed in NVS.
 
 ## Earlier changes kept
 

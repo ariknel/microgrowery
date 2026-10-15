@@ -24,14 +24,12 @@ static EventGroupHandle_t s_wifi_events;
 
 /* ---------------- station mode ---------------- */
 
-static void start_sntp_and_tz(void)
+/* The timezone itself is set at boot in schedule_init(). */
+static void start_sntp(void)
 {
-    setenv("TZ", WIFI_TZ_STRING, 1);
-    tzset();
-
     esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
     esp_netif_sntp_init(&config);
-    ESP_LOGI(TAG, "SNTP sync started (TZ=%s)", WIFI_TZ_STRING);
+    ESP_LOGI(TAG, "SNTP sync started");
 }
 
 static void start_mdns(void)
@@ -74,7 +72,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
         static bool s_started_once = false;
         if (!s_started_once) {
             start_mdns();
-            start_sntp_and_tz();
+            start_sntp();
             s_started_once = true;
         }
         xEventGroupSetBits(s_wifi_events, WIFI_CONNECTED_BIT);

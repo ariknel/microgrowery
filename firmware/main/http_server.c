@@ -198,22 +198,34 @@ static esp_err_t api_camera_freeze_post_handler(httpd_req_t *req)
     return send_json(req, resp);
 }
 
-/* ---------------- GET /stream (public, proxied MJPEG) ---------------- */
+/* ---------------- GET /stream (public, proxied MJPEG) ----------------
+   esp_http_server runs every request on one task. A stream never returns
+   while open, so it's handed off to its own task — otherwise one open
+   stream blocks every other request (dashboard, unfreeze, ...). That
+   blocking, plus a frozen stream with no cached frame idling forever
+   without sending anything (so a closed tab was never noticed), is what
+   hung the whole server when Freeze was pressed in two windows. */
 
-static esp_err_t stream_get_handler(httpd_req_t *req)
+#define STREAM_MAX_CLIENTS 3
+
+static portMUX_TYPE s_stream_lock = portMUX_INITIALIZER_UNLOCKED;
+static int s_stream_clients;
+
+static void stream_release_slot(void)
 {
-    httpd_resp_set_type(req, "multipart/x-mixed-replace;boundary=frame");
+    taskENTER_CRITICAL(&s_stream_lock);
+    s_stream_clients--;
+    taskEXIT_CRITICAL(&s_stream_lock);
+}
 
-    bool frozen;
-    state_lock();
-    frozen = g_state.cam_frozen;
-    state_unlock();
+static void stream_task(void *arg)
+{
+    httpd_req_t *req = arg;
+    uint32_t seq = 0;
+    bool live = false;
 
-    bool live_active = !frozen;
-    if (live_active) uart_cam_request_stream_start();
-
-    esp_err_t res = ESP_OK;
     for (;;) {
+        bool frozen;
         state_lock();
         frozen = g_state.cam_frozen;
         state_unlock();
@@ -222,27 +234,23 @@ static esp_err_t stream_get_handler(httpd_req_t *req)
         size_t len;
 
         if (frozen) {
-            if (live_active) {
-                uart_cam_request_stream_stop();
-                live_active = false;
+            if (live) {
+                uart_cam_live_release();
+                live = false;
             }
-            if (uart_cam_get_cached_frame(&buf, &len) != ESP_OK) {
-                /* Nothing captured yet this boot to freeze on — wait and
-                 * re-check rather than busy-loop; still re-checks `frozen`
-                 * every pass so unfreezing while here takes effect at once. */
-                vTaskDelay(pdMS_TO_TICKS(500));
-                continue;
-            }
+            /* Nothing to freeze on yet: end the stream rather than wait
+             * silently. The dashboard reconnects on its own. */
+            if (uart_cam_get_cached_frame(&buf, &len) != ESP_OK) break;
         } else {
-            if (!live_active) {
-                uart_cam_request_stream_start();
-                live_active = true;
+            if (!live) {
+                uart_cam_live_acquire();
+                live = true;
             }
-            if (uart_cam_get_frame(&buf, &len, 5000) != ESP_OK) {
-                ESP_LOGW(TAG, "no frame for 5s, stopping stream");
+            if (uart_cam_get_frame_after(&seq, &buf, &len, 5000) != ESP_OK) {
                 state_lock();
                 g_state.cam_online = false;
                 state_unlock();
+                ESP_LOGW(TAG, "no frame for 5s, stopping stream");
                 break;
             }
         }
@@ -251,18 +259,49 @@ static esp_err_t stream_get_handler(httpd_req_t *req)
         int hlen = snprintf(header, sizeof(header),
                              "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n",
                              (unsigned)len);
-        res = httpd_resp_send_chunk(req, header, hlen);
+        esp_err_t res = httpd_resp_send_chunk(req, header, hlen);
         if (res == ESP_OK) res = httpd_resp_send_chunk(req, (const char *)buf, len);
         if (res == ESP_OK) res = httpd_resp_send_chunk(req, "\r\n", 2);
         free(buf);
-        if (res != ESP_OK) break; /* client disconnected */
+        if (res != ESP_OK) break; /* client gone */
 
-        if (frozen) vTaskDelay(pdMS_TO_TICKS(1000)); /* replay cache at ~1fps, no need for more */
+        if (frozen) vTaskDelay(pdMS_TO_TICKS(1000)); /* replay the cache at ~1fps */
     }
 
-    if (live_active) uart_cam_request_stream_stop();
+    if (live) uart_cam_live_release();
     httpd_resp_send_chunk(req, NULL, 0);
-    return res;
+    httpd_req_async_handler_complete(req);
+    stream_release_slot();
+    vTaskDelete(NULL);
+}
+
+static esp_err_t stream_get_handler(httpd_req_t *req)
+{
+    bool slot = false;
+    taskENTER_CRITICAL(&s_stream_lock);
+    if (s_stream_clients < STREAM_MAX_CLIENTS) {
+        s_stream_clients++;
+        slot = true;
+    }
+    taskEXIT_CRITICAL(&s_stream_lock);
+    if (!slot) {
+        httpd_resp_set_status(req, "503 Service Unavailable");
+        return httpd_resp_send(req, "too many streams", HTTPD_RESP_USE_STRLEN);
+    }
+
+    httpd_req_t *async_req = NULL;
+    if (httpd_req_async_handler_begin(req, &async_req) != ESP_OK) {
+        stream_release_slot();
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "stream unavailable");
+    }
+    httpd_resp_set_type(async_req, "multipart/x-mixed-replace;boundary=frame");
+
+    if (xTaskCreate(stream_task, "stream", 4096, async_req, 4, NULL) != pdPASS) {
+        httpd_req_async_handler_complete(async_req);
+        stream_release_slot();
+        return ESP_FAIL;
+    }
+    return ESP_OK;
 }
 
 /* ---------------- POST /api/auth (public) ---------------- */
